@@ -1,0 +1,7 @@
+-pthread
+-m
+-Iinclude
+-Ivehicle-visualizer/include
+-Ioptions
+-Idecoder-module/asn1/include
+-Idecoder-module/include

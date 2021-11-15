@@ -1,0 +1,1 @@
+This software is derived from the S-LDM (Server Local Dynamic Map) implementation. Please have a look at the main S-LDM repository before using this software.
