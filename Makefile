@@ -1,5 +1,7 @@
 EXECNAME=AIM
 
+OPENWRT_STAGING_DIR=/home/phd/Desktop/Francesco51/OpenWrt-V2X/staging_dir/target-x86_64_musl/usr/include
+
 SRC_DIR=src
 OBJ_DIR=obj
 
@@ -43,11 +45,19 @@ all: compilePC
 
 compilePC: CXX = g++
 compilePC: CC = gcc
-	
+
+compileAPU: CXX = x86_64-openwrt-linux-musl-g++
+compileAPU: CC = x86_64-openwrt-linux-musl-gcc
+compileAPU: LD = x86_64-openwrt-linux-musl-ld
+compileAPU: CFLAGS += -I$(OPENWRT_STAGING_DIR)
+
 compilePCdebug: CXXFLAGS += -g
 compilePCdebug: compilePC
 
-compilePC compilePCdebug: $(EXECNAME)
+compileAPUdebug: CXXFLAGS += -g
+compileAPUdebug: compileAPU
+
+compilePC compilePCdebug compileAPU compileAPUdebug: $(EXECNAME)
 
 # Standard targets
 $(EXECNAME): $(OBJ_CC)
