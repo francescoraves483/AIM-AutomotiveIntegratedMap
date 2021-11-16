@@ -60,7 +60,6 @@ SocketClient::rxThr(void) {
 
 	while(m_stopflg==false) {
 		if(poll(socketMon,2,-1)>0) {
-			fprintf(stdout,"HHAHAHHAHAHAHAHHAHA\n");
 			if(socketMon[0].revents>0) {
 				msglen=recvfrom(m_udp_rx_sock,msgbuf,sizeof(msgbuf),0,(struct sockaddr *)&rxSockAddr,&rxSockAddrLen);
 
