@@ -8,9 +8,9 @@
 #include "etsiDecoderFrontend.h"
 #include "LDMmap.h"
 #include "utils.h"
-#include "options.h"
 
 extern "C" {
+	#include "options.h"
 	#include "CAM.h"
 }
 

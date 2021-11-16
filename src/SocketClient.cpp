@@ -1,4 +1,4 @@
-#include "UDPclient.h"
+#include "SocketClient.h"
 #include "utils.h"
 #include <fstream>
 #include <iomanip>
@@ -39,6 +39,9 @@ SocketClient::rxThr(void) {
 	size_t msglen=-1;
 	uint8_t msgbuf[MSGBUF_MAXSIZ];
 
+	struct sockaddr_in rxSockAddr;
+	socklen_t rxSockAddrLen=sizeof(rxSockAddr);
+
 	m_receptionInProgress=true;
 
 	struct pollfd socketMon[2];
@@ -53,10 +56,13 @@ SocketClient::rxThr(void) {
 	socketMon[1].revents=0;
 	socketMon[1].events=POLLIN;
 
+	fprintf(stdout,"[INFO] Message reception started on interface: %s:%ld. Socket: %d.\n",options_string_pop(m_opts_ptr->udp_interface),m_opts_ptr->udp_port,m_udp_rx_sock);
+
 	while(m_stopflg==false) {
-		if(poll(socketMon,2,0)>0) {
+		if(poll(socketMon,2,-1)>0) {
+			fprintf(stdout,"HHAHAHHAHAHAHAHHAHA\n");
 			if(socketMon[0].revents>0) {
-				msglen=recvfrom(m_udp_rx_sock,msgbuf,sizeof(msgbuf),0,nullptr,nullptr);
+				msglen=recvfrom(m_udp_rx_sock,msgbuf,sizeof(msgbuf),0,(struct sockaddr *)&rxSockAddr,&rxSockAddrLen);
 
 				if(msglen<0) {
 					fprintf(stderr,"[ERROR] Unable to receive a message from the specified socket.\n");
@@ -69,6 +75,8 @@ SocketClient::rxThr(void) {
 		}
 	}
 
+	fprintf(stdout,"[INFO] Message reception terminated on interface: %s:%ld\n",options_string_pop(m_opts_ptr->udp_interface),m_opts_ptr->udp_port);
+
 	m_unlock_pd_rd=-1;
 	m_unlock_pd_wr=-1;
 	m_receptionInProgress=false;
@@ -77,6 +85,16 @@ SocketClient::rxThr(void) {
 void 
 SocketClient::startReception(void) {
 	int m_unlock_pd[2]={-1,-1};
+
+	if(m_logfile_name!="") {
+		if(m_logfile_name=="stdout") {
+			m_logfile_file=stdout;
+		} else {
+			// Opening the output file in write + append mode just to be safe in case the user does not change the file name
+			// between different executions of the S-LDM
+			m_logfile_file=fopen(m_logfile_name.c_str(),"wa");
+		}
+	}
 
 	if(m_receptionInProgress==true) {
 		fprintf(stderr,"[WARNING] Attempted to start a V2X message reception while the reception is already in progress.\n"
@@ -99,6 +117,10 @@ SocketClient::stopReception(void) {
 			fprintf(stderr,"[ERROR] Failure to successfully execute stopReception(). The program behaviour may be unexpected from now on.\n");
 		}
 	}
+
+	if(m_logfile_name!="" && m_logfile_name!="stdout") {
+		fclose(m_logfile_file);
+	}
 }
 
 void 
@@ -117,8 +139,8 @@ SocketClient::manageMessage(uint8_t *message_bin_buf,size_t bufsize) {
 
 	if(m_printMsg == true) {
 		fprintf(stdout,"Rx msg: ");
-		for(int i=0;i<bufsize;i++) {
-			fprintf(stdout,"%02X",message_bin_buf[i]);
+		for(size_t sti=0;sti<bufsize;sti++) {
+			fprintf(stdout,"%02X",message_bin_buf[sti]);
 		}
 		fprintf(stdout,"\n");
 	}
