@@ -241,6 +241,9 @@ int main(int argc, char **argv) {
 			// Create the main SocketClient object for the reception of the V2X messages
 			SocketClient mainRecvClient(udp_sockfd,&aim_opts, db_ptr, logfile_name);
 
+			// Set the "self" IP address, so that all the messages coming from this address will be discarded
+			mainRecvClient.setSelfIP(dissem_vif_addr);
+
 			// Start the reception of V2X messages
 			mainRecvClient.startReception();
 		}

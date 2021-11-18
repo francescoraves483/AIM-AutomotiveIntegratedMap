@@ -43,6 +43,9 @@ class SocketClient {
 
 		std::atomic<int> m_unlock_pd_rd;
 		std::atomic<int> m_unlock_pd_wr;
+
+		struct in_addr m_self_ip; // Self IP address; if specified, all the received messages coming from this IP address will be discarded
+		bool m_self_ip_set;
 	public:
 		SocketClient(const int &udp_rx_sock,struct options *opts_ptr, ldmmap::LDMMap *db_ptr, std::string logfile_name):
 			m_udp_rx_sock(udp_rx_sock), m_opts_ptr(opts_ptr), m_db_ptr(db_ptr), m_logfile_name(logfile_name) {
@@ -53,11 +56,14 @@ class SocketClient {
 				m_receptionInProgress=false;
 				m_unlock_pd_rd=-1;
 				m_unlock_pd_wr=-1;
+				m_self_ip_set=false;
 			}
 
 			void setPrintMsg(bool printMsgEnable) {m_printMsg = printMsgEnable;}
 
 			void setClientID(std::string id) {m_client_id=id;}
+
+			void setSelfIP(struct in_addr self_ip) {m_self_ip=self_ip; m_self_ip_set=true;}
 
 			void startReception(void);
 			void stopReception(void);

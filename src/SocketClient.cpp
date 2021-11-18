@@ -63,6 +63,11 @@ SocketClient::rxThr(void) {
 			if(socketMon[0].revents>0) {
 				msglen=recvfrom(m_udp_rx_sock,msgbuf,sizeof(msgbuf),0,(struct sockaddr *)&rxSockAddr,&rxSockAddrLen);
 
+				// A message from myself has been received -> this message should be discarded
+				if(rxSockAddr.sin_addr.s_addr==m_self_ip.s_addr) {
+					continue;
+				}
+
 				if(msglen<0) {
 					fprintf(stderr,"[ERROR] Unable to receive a message from the specified socket.\n");
 				} else {
