@@ -89,8 +89,8 @@ static const struct option long_opts[]={
 	"\t  Default: ("DEFAULT_IFACE").\n"
 
 #define OPT_p_description \
-	LONGOPT_STR_CONSTRUCTOR(LONGOPT_i) \
-	"  -i: set the UDP port from which messages should be received.\n" \
+	LONGOPT_STR_CONSTRUCTOR(LONGOPT_p) \
+	"  -p: set the UDP port from which messages should be received.\n" \
 	"\t  Default: ("STRINGIFY(DEFAULT_UDP_PORT)").\n"
 
 #define OPT_A_description \
