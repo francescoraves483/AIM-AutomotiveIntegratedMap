@@ -4,6 +4,7 @@
 #include <memory>
 #include <atomic>
 #include <thread>
+#include <cstring>
 
 #include "etsiDecoderFrontend.h"
 #include "LDMmap.h"
@@ -15,11 +16,14 @@ extern "C" {
 }
 
 // Maxium possible size of messages which could be received from the socket
-#define MSGBUF_MAXSIZ 2048 
+#define MSGBUF_MAXSIZ 2048
+
+// GeoNetworking Ethertype value
+#define GN_ETHERTYPE 0x8947
 
 class SocketClient {
 	private:
-		int m_udp_rx_sock=-1;
+		int m_raw_rx_sock=-1;
 		etsiDecoder::decoderFrontend m_decodeFrontend;
 		struct options *m_opts_ptr;
 		ldmmap::LDMMap *m_db_ptr;
@@ -44,11 +48,11 @@ class SocketClient {
 		std::atomic<int> m_unlock_pd_rd;
 		std::atomic<int> m_unlock_pd_wr;
 
-		struct in_addr m_self_ip; // Self IP address; if specified, all the received messages coming from this IP address will be discarded
-		bool m_self_ip_set;
+		uint8_t m_self_mac[6]={0}; // Self MAC address; if specified, all the received messages coming from this MAC address will be discarded
+		bool m_self_mac_set;
 	public:
-		SocketClient(const int &udp_rx_sock,struct options *opts_ptr, ldmmap::LDMMap *db_ptr, std::string logfile_name):
-			m_udp_rx_sock(udp_rx_sock), m_opts_ptr(opts_ptr), m_db_ptr(db_ptr), m_logfile_name(logfile_name) {
+		SocketClient(const int &raw_rx_sock,struct options *opts_ptr, ldmmap::LDMMap *db_ptr, std::string logfile_name):
+			m_raw_rx_sock(raw_rx_sock), m_opts_ptr(opts_ptr), m_db_ptr(db_ptr), m_logfile_name(logfile_name) {
 				m_client_id="unset";
 				m_logfile_file=nullptr;
 				m_printMsg=false;
@@ -56,14 +60,15 @@ class SocketClient {
 				m_receptionInProgress=false;
 				m_unlock_pd_rd=-1;
 				m_unlock_pd_wr=-1;
-				m_self_ip_set=false;
+				m_self_mac_set=false;
+				memset(m_self_mac,0,6);
 			}
 
 			void setPrintMsg(bool printMsgEnable) {m_printMsg = printMsgEnable;}
 
 			void setClientID(std::string id) {m_client_id=id;}
 
-			void setSelfIP(struct in_addr self_ip) {m_self_ip=self_ip; m_self_ip_set=true;}
+			void setSelfMAC(uint8_t self_mac[6]) {memcpy(m_self_mac,self_mac,6); m_self_mac_set=true;}
 
 			void startReception(void);
 			void stopReception(void);

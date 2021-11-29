@@ -13,6 +13,9 @@
 #include <sys/ioctl.h>
 #include <net/if.h>
 #include <arpa/inet.h>
+#include <sys/socket.h>
+#include <net/ethernet.h>
+#include <linux/if_packet.h>
 
 extern "C" {
 	#include "options.h"
@@ -201,48 +204,55 @@ int main(int argc, char **argv) {
 		logfile_name=std::string(options_string_pop(aim_opts.logfile_name));
 	}
 
-	// Open a socket for the reception of UDP messages
-	int udp_sockfd=-1;
-	udp_sockfd=socket(AF_INET,SOCK_DGRAM,IPPROTO_UDP);
+	// Open a socket for the reception of raw (BTP + GeoNetworking) messages
+	int raw_sockfd=-1;
+	// sockfd=socket(AF_INET,SOCK_DGRAM,IPPROTO_UDP); // Old UDP socket, no more used
+	raw_sockfd=socket(AF_PACKET,SOCK_RAW,htons(ETH_P_ALL));
 
-	if(udp_sockfd<0) {
-		fprintf(stderr,"Critical error: cannot open UDP socket for message reception.\n");
+	if(raw_sockfd<0) {
+		fprintf(stderr,"Critical error: cannot open raw socket for message reception (expecting CAMs over BTP and GeoNetworking).\n");
 		terminatorFlag = true;
 	} else {
-		fprintf(stdout,"Socket opened. Descriptor: %d\n",udp_sockfd);
-		// Get the IP address of the dissemination interface
+		fprintf(stdout,"Socket opened. Descriptor: %d\n",raw_sockfd);
+
+		// Get the MAC address of the reception interface
 		struct ifreq ifreq;
-		struct in_addr dissem_vif_addr;
-		strncpy(ifreq.ifr_name,options_string_pop(aim_opts.udp_interface),IFNAMSIZ);
-
-		ifreq.ifr_addr.sa_family=AF_INET;
-
-		if(ioctl(udp_sockfd,SIOCGIFADDR,&ifreq)!=-1) {
-			dissem_vif_addr=((struct sockaddr_in*)&ifreq.ifr_addr)->sin_addr;
+		uint8_t dissem_vif_mac[6]={0};
+		strncpy(ifreq.ifr_name,options_string_pop(aim_opts.udp_interface),IFNAMSIZ); 
+		if(ioctl(raw_sockfd,SIOCGIFHWADDR,&ifreq)!=-1) {
+			memcpy(dissem_vif_mac,ifreq.ifr_hwaddr.sa_data,6);
 		} else {
-			fprintf(stderr,"Critical error: cannot find an IP address for interface: %s\n",options_string_pop(aim_opts.udp_interface));
-			terminatorFlag = true;
+			std::cerr << "Critical error: cannot find a MAC address for interface: " << options_string_pop(aim_opts.udp_interface) << std::endl;
+			exit(EXIT_FAILURE);
 		}
 
 		if(terminatorFlag==false) {
-			// Bind UDP socket
-			struct sockaddr_in bindSockAddr;
-			memset(&bindSockAddr,0,sizeof(struct sockaddr_in));
-			bindSockAddr.sin_family=AF_INET;
-			bindSockAddr.sin_port=htons(aim_opts.udp_port);
-			bindSockAddr.sin_addr.s_addr=INADDR_ANY;
+			// Bind the raw socket
+			// 1. Get the index of the dissemination interface
+			int ifindex=if_nametoindex(options_string_pop(aim_opts.udp_interface));
+			if(ifindex<1) {
+				std::cerr << "Critical error: cannot find an interface index for interface: " << options_string_pop(aim_opts.udp_interface) << std::endl;
+				exit(EXIT_FAILURE);
+			}
+
+			// 2. Bind to the desired interface, by leveraging the previously obtained interface index
+			struct sockaddr_ll bindSockAddr;
+			memset(&bindSockAddr,0,sizeof(bindSockAddr));
+			bindSockAddr.sll_ifindex=ifindex;
+			bindSockAddr.sll_family=AF_PACKET;
+			bindSockAddr.sll_protocol=htons(ETH_P_ALL);
 
 			errno=0;
-			if(bind(udp_sockfd,(struct sockaddr *) &bindSockAddr,sizeof(bindSockAddr))<0) {
-				fprintf(stderr,"Critical error: cannot bind the UDP socket for the reception of V2X messages. Error: %s\n",strerror(errno));
+			if(bind(raw_sockfd,(struct sockaddr *) &bindSockAddr,sizeof(bindSockAddr))<0) {
+				fprintf(stderr,"Critical error: cannot bind the raw socket for the reception of V2X messages. Error: %s\n",strerror(errno));
 				exit(EXIT_FAILURE);
 			}
 
 			// Create the main SocketClient object for the reception of the V2X messages
-			SocketClient mainRecvClient(udp_sockfd,&aim_opts, db_ptr, logfile_name);
+			SocketClient mainRecvClient(raw_sockfd,&aim_opts, db_ptr, logfile_name);
 
-			// Set the "self" IP address, so that all the messages coming from this address will be discarded
-			mainRecvClient.setSelfIP(dissem_vif_addr);
+			// Set the "self" MAC address, so that all the messages coming from this address will be discarded
+			mainRecvClient.setSelfMAC(dissem_vif_mac);
 
 			// Start the reception of V2X messages
 			mainRecvClient.startReception();
@@ -253,7 +263,7 @@ int main(int argc, char **argv) {
 	pthread_join(vehviz_tid,nullptr);
 
 	// Close the socket
-	close(udp_sockfd);
+	close(raw_sockfd);
 
 	db_ptr->clear();
 

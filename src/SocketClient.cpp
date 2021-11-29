@@ -5,6 +5,8 @@
 #include <iostream>
 #include <poll.h>
 #include <unistd.h>
+#include <linux/if_packet.h> // Needed for "struct sockaddr_ll"
+#include <net/ethernet.h> // Needed for "struct ether_header"
 
 // If this is a full ITS message manage the low frequency container data
 // Check if this CAM contains the low frequency container
@@ -34,20 +36,29 @@ SocketClient::manage_LowfreqContainer(CAM_t *decoded_cam,uint32_t stationID) {
           }
 }
 
+inline bool compare_mac(uint8_t mac_a[6],uint8_t mac_b[6]) {
+	return (mac_a[0]==mac_b[0] && 
+		mac_a[1]==mac_b[1] && 
+		mac_a[2]==mac_b[2] && 
+		mac_a[3]==mac_b[3] && 
+		mac_a[4]==mac_b[4] && 
+		mac_a[5]==mac_b[5]);
+}
+
 void
 SocketClient::rxThr(void) {
 	size_t msglen=-1;
 	uint8_t msgbuf[MSGBUF_MAXSIZ];
 
-	struct sockaddr_in rxSockAddr;
-	socklen_t rxSockAddrLen=sizeof(rxSockAddr);
+	struct sockaddr_ll addrll;
+	socklen_t addrLen=sizeof(addrll);
 
 	m_receptionInProgress=true;
 
 	struct pollfd socketMon[2];
 
 	// Monitor the socket
-	socketMon[0].fd=m_udp_rx_sock;
+	socketMon[0].fd=m_raw_rx_sock;
 	socketMon[0].revents=0;
 	socketMon[0].events=POLLIN;
 
@@ -56,22 +67,32 @@ SocketClient::rxThr(void) {
 	socketMon[1].revents=0;
 	socketMon[1].events=POLLIN;
 
-	fprintf(stdout,"[INFO] Message reception started on interface: %s:%ld. Socket: %d.\n",options_string_pop(m_opts_ptr->udp_interface),m_opts_ptr->udp_port,m_udp_rx_sock);
+	fprintf(stdout,"[INFO] Message reception started on interface: %s:%ld. Socket: %d.\n",options_string_pop(m_opts_ptr->udp_interface),m_opts_ptr->udp_port,m_raw_rx_sock);
+
+	struct ether_header* etherHeaderPtr;
 
 	while(m_stopflg==false) {
 		if(poll(socketMon,2,-1)>0) {
 			if(socketMon[0].revents>0) {
-				msglen=recvfrom(m_udp_rx_sock,msgbuf,sizeof(msgbuf),0,(struct sockaddr *)&rxSockAddr,&rxSockAddrLen);
+				msglen=recvfrom(m_raw_rx_sock,msgbuf,sizeof(msgbuf),0,(struct sockaddr *)&addrll,&addrLen);
+
+				etherHeaderPtr=reinterpret_cast<struct ether_header *>(msgbuf);
+
+				// Discard any non-GN packet
+				if (ntohs(etherHeaderPtr->ether_type)!=GN_ETHERTYPE) { 
+					continue;
+				}
 
 				// A message from myself has been received -> this message should be discarded
-				if(rxSockAddr.sin_addr.s_addr==m_self_ip.s_addr) {
+				if(m_self_mac_set==false && compare_mac(etherHeaderPtr->ether_shost,m_self_mac)==true) {
 					continue;
 				}
 
 				if(msglen<0) {
 					fprintf(stderr,"[ERROR] Unable to receive a message from the specified socket.\n");
 				} else {
-					manageMessage(msgbuf,msglen);
+					// Process the received message, after removing the "Ethernet" header with the EtherType, and the source and destination MAC addresses
+					manageMessage(msgbuf+sizeof(struct ether_header),msglen-sizeof(struct ether_header));
 				}
 			} else if(socketMon[1].revents>0) {
 				break;
