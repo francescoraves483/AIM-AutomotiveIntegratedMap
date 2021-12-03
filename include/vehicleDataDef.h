@@ -10,6 +10,11 @@
 // Facility macro to convert from DEG to RAD
 #define DEG_2_RAD(val) ((val)*M_PI/180.0)
 
+// Unavailable value for the RSSI
+#define RSSI_UNAVAILABLE -80000
+#define CPULOAD_UNAVAILABLE 101
+#define RAMLOAD_UNAVAILABLE 512001
+
 namespace ldmmap {
 	// Class to store optional data
 	// If the data is not available, m_available is 'false' and no actual data is stored (getData() does not return any meaningful data)
@@ -60,6 +65,12 @@ namespace ldmmap {
 		OptionalDataItem<long> vehicleWidth;
 		OptionalDataItem<long> vehicleLength;
 		e_StationTypeLDM stationType;
+		uint8_t macaddr[6];
+		std::string auxiliary_macaddr;
+		double rssi_dBm;
+		double rssi_auxiliary_dBm;
+		double cpu_load_perc;
+		double ram_load_MB;
 
 		// Low frequency container data
 		OptionalDataItem<uint8_t> exteriorLights; // Bit string with exterior lights status

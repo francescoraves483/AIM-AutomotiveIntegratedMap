@@ -36,6 +36,7 @@ namespace etsiDecoder {
 		etsiDecodedType_e type;
 
 		uint32_t gnTimestamp;
+		uint8_t GNaddress[8];
 		//For DENMs GeoArea
 		int32_t posLong;
 		int32_t posLat;

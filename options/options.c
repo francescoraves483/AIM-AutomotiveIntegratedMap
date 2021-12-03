@@ -17,6 +17,7 @@
 #define LONGOPT_i "interface"
 #define LONGOPT_p "port"
 #define LONGOPT_A "central-zone"
+#define LONGOPT_R "rssi-aux-retrieval-periodicity"
 
 // Long-only options
 #define LONGOPT_vehviz_update_interval_sec "vehviz-update-interval"
@@ -40,6 +41,7 @@ static const struct option long_opts[]={
 	{LONGOPT_L,				required_argument,	NULL, 'L'},
 	{LONGOPT_A,				required_argument,	NULL, 'A'},
 	{LONGOPT_g,				no_argument,		NULL, 'g'},
+	{LONGOPT_R,				required_argument,	NULL, 'R'},
 
 	{LONGOPT_vehviz_update_interval_sec,			required_argument,	NULL, LONGOPT_vehviz_update_interval_sec_val},
 
@@ -88,6 +90,11 @@ static const struct option long_opts[]={
 	"  -i: set the interface name from which messages should be received.\n" \
 	"\t  Default: ("DEFAULT_IFACE").\n"
 
+#define OPT_R_description \
+	LONGOPT_STR_CONSTRUCTOR(LONGOPT_R) \
+	"  -R <periodicity in ms>: set the refresh periodicity for the auxiliary device RSSI retrieval.\n" \
+	"\t  Setting this to any value <=0 will disable the functionality. Default: -1 (disabled).\n"
+
 #define OPT_p_description \
 	LONGOPT_STR_CONSTRUCTOR(LONGOPT_p) \
 	"  -p: set the UDP port from which messages should be received.\n" \
@@ -112,6 +119,7 @@ static void print_long_info(char *argv0) {
 		OPT_w_description
 		OPT_L_description
 		OPT_g_description
+		OPT_R_description
 		OPT_vehviz_update_interval_sec_description
 		,
 		argv0,argv0,argv0);
@@ -151,6 +159,8 @@ void options_initialize(struct options *options) {
 	options->vehviz_update_interval_sec=DEFAULT_VEHVIZ_UPDATE_INTERVAL_SECONDS;
 
 	options->ageCheck_enabled=true;
+
+	options->rssi_aux_update_interval_msec=-1; // Disabled by default
 }
 
 unsigned int parse_options(int argc, char **argv, struct options *options) {
@@ -227,6 +237,19 @@ unsigned int parse_options(int argc, char **argv, struct options *options) {
 			case 'i':
 				if(!options_string_push(&(options->udp_interface),optarg)) {
 					fprintf(stderr,"Error in parsing the interface name: %s.\n",optarg);
+					print_short_info_err(options,argv[0]);
+				}
+				break;
+
+			case 'R':
+				errno=0; // Setting errno to 0 as suggested in the strtod() man page
+				options->rssi_aux_update_interval_msec=strtod(optarg,&sPtr);
+
+				if(sPtr==optarg) {
+					fprintf(stderr,"Cannot find any digit in the specified value (-R/--" LONGOPT_R ").\n");
+					print_short_info_err(options,argv[0]);
+				} else if(errno || options->rssi_aux_update_interval_msec>10000.0) {
+					fprintf(stderr,"Error in parsing the refresh rate for the auxiliary device RSSI retrieval. Remember that it must be smaller than 10 seconds (10000 ms).\n");
 					print_short_info_err(options,argv[0]);
 				}
 				break;

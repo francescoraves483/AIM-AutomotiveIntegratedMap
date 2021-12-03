@@ -52,7 +52,7 @@
 // Valid options
 // Any new option should be handled in the switch-case inside parse_options() and the corresponding char should be added to VALID_OPTS
 // If an option accepts an additional argument, it is followed by ':'
-#define VALID_OPTS "hvZ:z:w:L:gi:p:"
+#define VALID_OPTS "hvZ:z:w:L:gi:p:R:"
 
 #define INIT_CODE 0xAE
 
@@ -79,6 +79,8 @@ typedef struct options {
 	double vehviz_update_interval_sec; // Advanced option: modifies the update rate of the web-based GUI. Warning: decreasing this too much will affect performance! This value cannot be less than 0.05 s and more than 1 s.
 
 	bool ageCheck_enabled; // (-g option to set this to 'false') 'true' if an 'age check' on the received data should be performed before updating the database, 'false' otherwise. Default: 'true'.
+
+	double rssi_aux_update_interval_msec; // If set to <=0 (default value), the auxialiary RouterOS-based device RSSI retrieval will be disabled
 } options_t;
 
 void options_initialize(struct options *options);

@@ -1,5 +1,6 @@
 #include "SocketClient.h"
 #include "utils.h"
+#include <algorithm>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
@@ -7,6 +8,75 @@
 #include <unistd.h>
 #include <linux/if_packet.h> // Needed for "struct sockaddr_ll"
 #include <net/ethernet.h> // Needed for "struct ether_header"
+#include <linux/wireless.h>
+#include <sys/ioctl.h>
+
+void
+SocketClient::routerOS_RSSI_retriever(void) {
+	// Create a new timer
+	struct pollfd pollfddata;
+	int clockFd;
+
+	// Popen buffer
+	char popen_buff[2000];
+
+	if(timer_fd_create(pollfddata, clockFd, m_opts_ptr->rssi_aux_update_interval_msec*1e3)<0) {
+		std::cerr << "[ERROR] Fatal error! Cannot create timer for the routerOS RSSI retriever thread. No RSSI data will be available." << std::endl;
+		m_routeros_rssi={};
+		return;
+	}
+
+	POLL_DEFINE_JUNK_VARIABLE();
+
+	while(m_terminate_routeros_rssi_flag==false) {
+		if(poll(&pollfddata,1,0)>0) {
+			POLL_CLEAR_EVENT(clockFd);
+
+			// Original command via ssh: ssh admin@192.168.88.2 interface w60g monitor wlan60-1 once | grep -E "rssi|remote-address"
+			FILE *ssh = popen("stdbuf -o L ssh admin@192.168.88.2 interface w60g monitor wlan60-1 once | stdbuf -o L grep -E \"rssi|remote-address\"", "r");
+
+			if(ssh==NULL) {
+				// Sleep at least 1 second, and then try again after a timer expiration
+				sleep(1);
+				continue;
+			}
+
+			double rssi_val=-1;
+
+			std::vector<std::string> m_remotes;
+
+			while(fgets(popen_buff,2000,ssh)!=NULL) {
+				char* pch;
+				if(strstr(popen_buff,"remote-address")) {
+					m_remotes.clear();
+
+					pch=strtok(popen_buff,":");
+					pch=strtok(NULL," ,");
+
+					while(pch!=nullptr) {
+						std::string pchstr=std::string(pch);
+						pchstr.erase(std::remove_if(pchstr.begin(), pchstr.end(), isspace), pchstr.end());
+						m_remotes.push_back(pchstr);
+
+						pch=strtok(NULL, " ,");
+				  	}
+				} else if(strstr(popen_buff,"rssi")) {
+					pch = strtok (popen_buff,":");
+					pch = strtok (NULL," ,");
+
+					m_routeros_rssi_mutex.lock();
+					for(int i=0;i<m_remotes.size() && pch!=NULL;i++) {
+						m_routeros_rssi[m_remotes[i]]=atoi(pch);
+						pch=strtok(NULL, " ,");
+					}
+					m_routeros_rssi_mutex.unlock();
+				}
+			}
+		}
+	}
+
+	close(clockFd);
+}
 
 // If this is a full ITS message manage the low frequency container data
 // Check if this CAM contains the low frequency container
@@ -131,12 +201,19 @@ SocketClient::startReception(void) {
 		}
 		
 		std::thread runningRxThr(&SocketClient::rxThr,this);
+		if(m_opts_ptr->rssi_aux_update_interval_msec>0) {
+			std::thread runningRouterOSRSSIThr(&SocketClient::routerOS_RSSI_retriever,this);
+			runningRouterOSRSSIThr.join();
+		}
+
 		runningRxThr.join();
 	}
 }
 
 void 
 SocketClient::stopReception(void) {
+	m_terminate_routeros_rssi_flag=true;
+
 	if(m_unlock_pd_rd!=-1 && m_unlock_pd_wr!=-1) {
 		if(write(m_unlock_pd_wr,"\0",1)<0) {
 			fprintf(stderr,"[ERROR] Failure to successfully execute stopReception(). The program behaviour may be unexpected from now on.\n");
@@ -265,6 +342,66 @@ SocketClient::manageMessage(uint8_t *message_bin_buf,size_t bufsize) {
 		vehdata.stationID = stationID; // It is very important to save also the stationID
 		vehdata.camTimestamp = static_cast<long>(decoded_cam->cam.generationDeltaTime);
 		vehdata.stationType = static_cast<ldmmap::e_StationTypeLDM>(decoded_cam->cam.camParameters.basicContainer.stationType);
+		memcpy(vehdata.macaddr,decodedData.GNaddress,6); // Save the vehicle MAC address into the database
+
+		// Part specific to AIM: try to retrieve data also from a possible, proposed, channel load and node status container
+		if(decoded_cam->cam.camParameters.channelNodeStatusContainer!=nullptr) {
+			vehdata.cpu_load_perc = 
+				decoded_cam->cam.camParameters.channelNodeStatusContainer->cpuLoad==CPULoad_unavailable ?
+				CPULOAD_UNAVAILABLE :
+				decoded_cam->cam.camParameters.channelNodeStatusContainer->cpuLoad/100.0;
+
+			vehdata.ram_load_MB = 
+				decoded_cam->cam.camParameters.channelNodeStatusContainer->ramLoad==RAMLoad_unavailable ?
+				RAMLOAD_UNAVAILABLE :
+				static_cast<double>(decoded_cam->cam.camParameters.channelNodeStatusContainer->ramLoad);
+
+			if(decoded_cam->cam.camParameters.channelNodeStatusContainer->auxilliaryLinkMac!=nullptr) {
+				// If the size is different than 6, this is not a MAC address, so it should not be processed
+				if(decoded_cam->cam.camParameters.channelNodeStatusContainer->auxilliaryLinkMac->size!=6) {
+					// NEED TO MANAGE THE OCTET STRING AND CONVERT THE HEX VALUES INTO AN HEX std::string
+					// THE VALUES SHALL THEN BE STORED INTO vehdata.auxiliary_macaddr
+					char c_str_macaddr[18]; // 12 characters + 5 ":" + "\0"
+
+					std::snprintf(c_str_macaddr,18,"%02X:%02X:%02X:%02X:%02X:%02X",
+						decoded_cam->cam.camParameters.channelNodeStatusContainer->auxilliaryLinkMac->buf[0],
+						decoded_cam->cam.camParameters.channelNodeStatusContainer->auxilliaryLinkMac->buf[1],
+						decoded_cam->cam.camParameters.channelNodeStatusContainer->auxilliaryLinkMac->buf[2],
+						decoded_cam->cam.camParameters.channelNodeStatusContainer->auxilliaryLinkMac->buf[3],
+						decoded_cam->cam.camParameters.channelNodeStatusContainer->auxilliaryLinkMac->buf[4],
+						decoded_cam->cam.camParameters.channelNodeStatusContainer->auxilliaryLinkMac->buf[5]);
+
+					vehdata.auxiliary_macaddr=std::string(c_str_macaddr);
+				}
+			}
+		}
+
+		// Retrieve, if available, the information on the RSSI for the vehicle corresponding to that MAC address
+		struct iw_statistics wifistats;
+		struct iwreq wifireq;
+		strncpy(wifireq.ifr_name,options_string_pop(m_opts_ptr->udp_interface),IFNAMSIZ);
+		wifireq.u.data.pointer=&wifistats;
+		wifireq.u.data.length = sizeof(wifistats);
+
+		if(ioctl(m_raw_rx_sock,SIOCGIWSTATS,&wifireq) == -1 || !(wifistats.qual.updated & IW_QUAL_DBM)) {
+			vehdata.rssi_dBm=RSSI_UNAVAILABLE;
+		} else {
+			vehdata.rssi_dBm=wifistats.qual.level;
+		}
+
+		// Retrieve, if available, the information on the RSSI for a connected auxiliary device, via ssh
+		// This information is retrieved only if specified by the user
+		if(m_opts_ptr->rssi_aux_update_interval_msec>=0) {
+			m_routeros_rssi_mutex.lock();
+			
+			if(m_routeros_rssi.count(vehdata.auxiliary_macaddr)>0) {
+				vehdata.rssi_auxiliary_dBm=m_routeros_rssi[vehdata.auxiliary_macaddr];
+			} else {
+				vehdata.rssi_auxiliary_dBm=RSSI_UNAVAILABLE;
+			}
+
+			m_routeros_rssi_mutex.unlock();
+		}
 
 		if(decoded_cam->cam.camParameters.highFrequencyContainer.choice.basicVehicleContainerHighFrequency.vehicleWidth != VehicleWidth_unavailable) {
 			vehdata.vehicleWidth = ldmmap::OptionalDataItem<long>(decoded_cam->cam.camParameters.highFrequencyContainer.choice.basicVehicleContainerHighFrequency.vehicleWidth*100);
@@ -287,7 +424,6 @@ SocketClient::manageMessage(uint8_t *message_bin_buf,size_t bufsize) {
 			} else {
 				l_inst_period=-1.0;
 			}
-			
 		}
 
 		// std::cout << "[DEBUG] Updating vehicle with stationID: " << vehdata.stationID << std::endl;
