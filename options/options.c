@@ -18,11 +18,14 @@
 #define LONGOPT_p "port"
 #define LONGOPT_A "central-zone"
 #define LONGOPT_R "rssi-aux-retrieval-periodicity"
+#define LONGOPT_E "enable-enhanced-CAMs"
 
 // Long-only options
 #define LONGOPT_vehviz_update_interval_sec "vehviz-update-interval"
+#define LONGOPT_aux_dev_addr "aux-dev-addr"
 // The corresponding "val"s are used internally and they should be set as sequential integers starting from 256 (the range 320-399 should not be used as it is reserved to the AMQP broker long options)
 #define LONGOPT_vehviz_update_interval_sec_val 256
+#define LONGOPT_aux_dev_addr_val 257
 
 #define LONGOPT_STR_CONSTRUCTOR(LONGOPT_STR) "  --"LONGOPT_STR"\n"
 
@@ -42,8 +45,10 @@ static const struct option long_opts[]={
 	{LONGOPT_A,				required_argument,	NULL, 'A'},
 	{LONGOPT_g,				no_argument,		NULL, 'g'},
 	{LONGOPT_R,				required_argument,	NULL, 'R'},
+	{LONGOPT_E,				no_argument,		NULL, 'E'},
 
-	{LONGOPT_vehviz_update_interval_sec,			required_argument,	NULL, LONGOPT_vehviz_update_interval_sec_val},
+	{LONGOPT_vehviz_update_interval_sec,	required_argument,	NULL, LONGOPT_vehviz_update_interval_sec_val},
+	{LONGOPT_aux_dev_addr,					required_argument,	NULL, LONGOPT_aux_dev_addr_val},
 
 	{NULL, 0, NULL, 0}
 };
@@ -105,6 +110,20 @@ static const struct option long_opts[]={
 	"  -A: set a central latitude and longitude around which the Vehicle Visualizer map will be drawn.\n" \
 	"\t  This option is thought solely for visualization purposes. Default: ("STRINGIFY(DEFAULT_CENTRAL_LAT)"-"STRINGIFY(DEFAULT_CENTRAL_LON)").\n"
 
+#define OPT_aux_dev_addr_description \
+	"  --"LONGOPT_aux_dev_addr" <IP address>: set the IP address of a connected auxiliary device for communication.\n" \
+	"\t  This device should run RouterOS, and this option has an effect only if --"LONGOPT_R"/-R\n" \
+	"\t  has been specifiedwith a value greater than 0. Default: ("DEFAULT_AUX_IP"). Important: for the time being,\n" \
+	"\t  the device should have a user with name 'admin' and no password.\n"
+
+#define OPT_E_description \
+	LONGOPT_STR_CONSTRUCTOR(LONGOPT_E) \
+	"  -E: enable decoding of experimental enhanced CAMs containing an additional container with computational load and\n" \
+	"\t  wireless channel information. This type of CAMs is identical to the standard one, with the addition of the\n" \
+	"\t  optional additional container. It has been defined as part of an experimental research activity. Thus, do\n" \
+	"\t  not enable this option unless you know what you are doing. Any fully standard-compliant usage of AIM should\n" \
+	"\t  not specify this option. Default: (not specified).\n"
+
 static void print_long_info(char *argv0) {
 	fprintf(stdout,"\nUsage: %s [-A S-LDM coverage internal area] [options]\n"
 		"%s [-h | --"LONGOPT_h"]: print help and show options\n"
@@ -120,8 +139,10 @@ static void print_long_info(char *argv0) {
 		OPT_L_description
 		OPT_g_description
 		OPT_R_description
+		OPT_E_description
 		OPT_vehviz_update_interval_sec_description
-		,
+		OPT_aux_dev_addr_description
+ 		,
 		argv0,argv0,argv0);
 
 	exit(EXIT_SUCCESS);
@@ -161,6 +182,10 @@ void options_initialize(struct options *options) {
 	options->ageCheck_enabled=true;
 
 	options->rssi_aux_update_interval_msec=-1; // Disabled by default
+
+	options->auxiliary_device_ip_addr=options_string_declare();
+
+	options->enable_enhanced_CAMs=false;
 }
 
 unsigned int parse_options(int argc, char **argv, struct options *options) {
@@ -277,6 +302,15 @@ unsigned int parse_options(int argc, char **argv, struct options *options) {
 				options->ageCheck_enabled=false;
 				break;
 
+			case 'E':
+				if(options->enable_enhanced_CAMs==true) {
+					fprintf(stderr,"Error. The enhanced CAMs decoding (-E/--"LONGOPT_E") has already been enabled once.\n");
+					print_short_info_err(options,argv[0]);
+				}
+
+				options->enable_enhanced_CAMs=true;
+				break;
+
 			case LONGOPT_vehviz_update_interval_sec_val:
 				errno=0; // Setting errno to 0 as suggested in the strtod() man page
 				options->vehviz_update_interval_sec=strtod(optarg,&sPtr);
@@ -286,6 +320,13 @@ unsigned int parse_options(int argc, char **argv, struct options *options) {
 					print_short_info_err(options,argv[0]);
 				} else if(errno || options->vehviz_update_interval_sec<0.05 || options->vehviz_update_interval_sec>1.0) {
 					fprintf(stderr,"Error in parsing the update rate for the web-based GUI. Remember that it must be within [0.05,1] seconds.\n");
+					print_short_info_err(options,argv[0]);
+				}
+				break;
+
+			case LONGOPT_aux_dev_addr_val:
+				if(!options_string_push(&(options->auxiliary_device_ip_addr),optarg)) {
+					fprintf(stderr,"Error in parsing the auxiliary communication device IP address: %s.\n",optarg);
 					print_short_info_err(options,argv[0]);
 				}
 				break;
@@ -327,6 +368,14 @@ unsigned int parse_options(int argc, char **argv, struct options *options) {
 		}
 	}
 
+	if(options_string_len(options->auxiliary_device_ip_addr)<=0) {
+		if(!options_string_push(&(options->auxiliary_device_ip_addr),DEFAULT_AUX_IP)) {
+			fprintf(stderr,"Error! Cannot set the default auxiliary device IP address, i.e. %s.\nPlease report this bug to the developers.\n",
+				DEFAULT_AUX_IP);
+			exit(EXIT_FAILURE);
+		}
+	}
+
 	return 0;
 }
 
@@ -338,4 +387,5 @@ void options_free(struct options *options) {
 
 	options_string_free(options->udp_interface);
 	options_string_free(options->vehviz_nodejs_addr);
+	options_string_free(options->auxiliary_device_ip_addr);
 }

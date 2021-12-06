@@ -8,6 +8,7 @@
 
 extern "C" {
 	#include "CAM.h"
+	#include "CAMEnhanced.h"
 	#include "DENM.h"
 }
 
@@ -16,6 +17,7 @@ NAMED_ENUM_DEFINE_FCNS(etsi_message_t,MSGTYPES);
 namespace etsiDecoder {
 	decoderFrontend::decoderFrontend() {
 		m_print_pkt = false;
+		m_enhanced_CAMs = false;
 	}
 
 	int decoderFrontend::decodeEtsi(uint8_t *buffer,size_t buflen,etsiDecodedData_t &decoded_data,msgType_e msgtype) {
@@ -86,7 +88,11 @@ namespace etsiDecoder {
 			if(btpDataIndication.destPort == CA_PORT) {
 				decoded_data.type = ETSI_DECODED_CAM;
 
-				decode_result = asn_decode(0, ATS_UNALIGNED_BASIC_PER, &asn_DEF_CAM, &decoded_, btpDataIndication.data, btpDataIndication.lenght);
+				if(m_enhanced_CAMs==false) {
+					decode_result = asn_decode(0, ATS_UNALIGNED_BASIC_PER, &asn_DEF_CAM, &decoded_, btpDataIndication.data, btpDataIndication.lenght);
+				} else {
+					decode_result = asn_decode(0, ATS_UNALIGNED_BASIC_PER, &asn_DEF_CAMEnhanced, &decoded_, btpDataIndication.data, btpDataIndication.lenght);
+				}
 
 				if(decode_result.code!=RC_OK || decoded_==nullptr) {
 					std::cerr << "[WARN] [Decoder] Warning: unable to decode a received CAM." << std::endl;
@@ -125,6 +131,12 @@ namespace etsiDecoder {
 					decoded_data.type = ETSI_DECODED_CAM_NOGN;
 
 					decode_result = asn_decode(0, ATS_UNALIGNED_BASIC_PER, &asn_DEF_CAM, &decoded_, buffer, buflen);
+
+					if(m_enhanced_CAMs==false) {
+						decode_result = asn_decode(0, ATS_UNALIGNED_BASIC_PER, &asn_DEF_CAM, &decoded_, buffer, buflen);
+					} else {
+						decode_result = asn_decode(0, ATS_UNALIGNED_BASIC_PER, &asn_DEF_CAMEnhanced, &decoded_, buffer, buflen);
+					}
 
 					if(decode_result.code!=RC_OK || decoded_==nullptr) {
 						std::cerr << "[WARN] [Decoder] Warning: unable to decode a received CAM (no BTP/GN)." << std::endl;

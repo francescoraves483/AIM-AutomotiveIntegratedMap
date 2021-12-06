@@ -19,10 +19,6 @@
 extern "C" {
 #endif
 
-typedef enum protocolVersion {
-	protocolVersion_currentVersion  = 2
-} e_protocolVersion;
-
 /* Dependencies */
 typedef enum messageID {
 	messageID_denm	= 1,

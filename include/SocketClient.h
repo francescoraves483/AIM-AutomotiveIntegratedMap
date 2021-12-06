@@ -15,6 +15,7 @@
 extern "C" {
 	#include "options.h"
 	#include "CAM.h"
+	#include "CAMEnhanced.h"
 }
 
 // Maxium possible size of messages which could be received from the socket
@@ -41,7 +42,7 @@ class SocketClient {
 
 		std::atomic<bool> m_receptionInProgress;
 
-		inline ldmmap::OptionalDataItem<uint8_t> manage_LowfreqContainer(CAM_t *decoded_cam,uint32_t stationID);
+		inline ldmmap::OptionalDataItem<uint8_t> manage_LowfreqContainer(void *decoded_cam_void,uint32_t stationID);
 		void manageMessage(uint8_t *buf,size_t bufsize);
 
 		// Reception thread method

@@ -11,6 +11,22 @@
 #include <linux/wireless.h>
 #include <sys/ioctl.h>
 
+#define lowFreqContainerManager(ptr_name,stationID) \
+		if(ptr_name->cam.camParameters.lowFrequencyContainer!=NULL) { \
+		      if(ptr_name->cam.camParameters.lowFrequencyContainer->choice.basicVehicleContainerLowFrequency.exteriorLights.buf!=NULL) { \
+		              return ldmmap::OptionalDataItem<uint8_t>(ptr_name->cam.camParameters.lowFrequencyContainer->choice.basicVehicleContainerLowFrequency.exteriorLights.buf[0]); \
+		      } else { \
+		              return ldmmap::OptionalDataItem<uint8_t>(false); \
+		      } \
+		} else { \
+		      ldmmap::LDMMap::returnedVehicleData_t retveh; \
+		      if(m_db_ptr->lookup(stationID,retveh)==ldmmap::LDMMap::LDMMAP_OK) { \
+		              return retveh.vehData.exteriorLights; \
+		      } else { \
+		              return ldmmap::OptionalDataItem<uint8_t>(false); \
+		      } \
+		}
+
 void
 SocketClient::routerOS_RSSI_retriever(void) {
 	// Create a new timer
@@ -33,15 +49,14 @@ SocketClient::routerOS_RSSI_retriever(void) {
 			POLL_CLEAR_EVENT(clockFd);
 
 			// Original command via ssh: ssh admin@192.168.88.2 interface w60g monitor wlan60-1 once | grep -E "rssi|remote-address"
-			FILE *ssh = popen("stdbuf -o L ssh admin@192.168.88.2 interface w60g monitor wlan60-1 once | stdbuf -o L grep -E \"rssi|remote-address\"", "r");
+			std::string ssh_command = "stdbuf -o L ssh admin@" + std::string(options_string_pop(m_opts_ptr->auxiliary_device_ip_addr)) + " interface w60g monitor wlan60-1 once | stdbuf -o L grep -E \"rssi|remote-address\"";
+			FILE *ssh = popen(ssh_command.c_str(),"r");
 
 			if(ssh==NULL) {
 				// Sleep at least 1 second, and then try again after a timer expiration
 				sleep(1);
 				continue;
 			}
-
-			double rssi_val=-1;
 
 			std::vector<std::string> m_remotes;
 
@@ -85,25 +100,14 @@ SocketClient::routerOS_RSSI_retriever(void) {
 // If not, check if an older information about the exterior lights of the current vehicle already exist in the database (using m_db_ptr->lookup()),
 // if this data exists, use this data, if not, just set the exterior lights information as unavailable
 inline ldmmap::OptionalDataItem<uint8_t>
-SocketClient::manage_LowfreqContainer(CAM_t *decoded_cam,uint32_t stationID) {
-
-          if(decoded_cam->cam.camParameters.lowFrequencyContainer!=NULL) {
-                  // In any normal, uncorrupted CAM, buf should never be NULL and it should contain at least one element (i.e. buf[0] always exists)
-                  if(decoded_cam->cam.camParameters.lowFrequencyContainer->choice.basicVehicleContainerLowFrequency.exteriorLights.buf!=NULL) {
-                          return ldmmap::OptionalDataItem<uint8_t>(decoded_cam->cam.camParameters.lowFrequencyContainer->choice.basicVehicleContainerLowFrequency.exteriorLights.buf[0]);
-                  } else {
-                          // Data from a corrupted decoded CAM is considered as unavailable, for the time being
-                          return ldmmap::OptionalDataItem<uint8_t>(false);
-                  }
-          } else {
-                  ldmmap::LDMMap::returnedVehicleData_t retveh;
-
-                  if(m_db_ptr->lookup(stationID,retveh)==ldmmap::LDMMap::LDMMAP_OK) {
-                          return retveh.vehData.exteriorLights;
-                  } else {
-                          return ldmmap::OptionalDataItem<uint8_t>(false);
-                  }
-          }
+SocketClient::manage_LowfreqContainer(void *decoded_cam_void,uint32_t stationID) {
+	if(m_opts_ptr->enable_enhanced_CAMs==true) {
+		CAMEnhanced_t *decoded_cam = (CAMEnhanced_t *) decoded_cam_void;
+		lowFreqContainerManager(decoded_cam,stationID);
+	} else {
+		CAM_t *decoded_cam = (CAM_t *) decoded_cam_void;
+		lowFreqContainerManager(decoded_cam,stationID);
+	}
 }
 
 inline bool compare_mac(uint8_t mac_a[6],uint8_t mac_b[6]) {
@@ -180,6 +184,10 @@ SocketClient::rxThr(void) {
 void 
 SocketClient::startReception(void) {
 	int m_unlock_pd[2]={-1,-1};
+
+	if(m_opts_ptr->enable_enhanced_CAMs==true) {
+		m_decodeFrontend.enableEnhancedCAMs();
+	}
 
 	if(m_logfile_name!="") {
 		if(m_logfile_name=="stdout") {
@@ -267,9 +275,21 @@ SocketClient::manageMessage(uint8_t *message_bin_buf,size_t bufsize) {
 	// If a CAM has been received, it should be used to update the internal in-memory database
 	if(decodedData.type == etsiDecoder::ETSI_DECODED_CAM || decodedData.type == etsiDecoder::ETSI_DECODED_CAM_NOGN) {
 		CAM_t *decoded_cam = (CAM_t *) decodedData.decoded_msg;
-		double lat = decoded_cam->cam.camParameters.basicContainer.referencePosition.latitude/10000000.0;
-		double lon = decoded_cam->cam.camParameters.basicContainer.referencePosition.longitude/10000000.0;
-		uint32_t stationID = decoded_cam->header.stationID;
+		CAMEnhanced_t *decoded_encam = (CAMEnhanced_t *) decodedData.decoded_msg;
+
+		double lat, lon;
+		uint64_t stationID;
+
+		if(m_opts_ptr->enable_enhanced_CAMs==true) {
+			lat = decoded_encam->cam.camParameters.basicContainer.referencePosition.latitude/10000000.0;
+			lon = decoded_encam->cam.camParameters.basicContainer.referencePosition.longitude/10000000.0;
+			stationID = decoded_encam->header.stationID;
+		} else {
+			lat = decoded_cam->cam.camParameters.basicContainer.referencePosition.latitude/10000000.0;
+			lon = decoded_cam->cam.camParameters.basicContainer.referencePosition.longitude/10000000.0;
+			stationID = decoded_cam->header.stationID;
+		}
+		
 		double l_inst_period=0.0;
 
 		if(m_logfile_name!="") {
@@ -280,7 +300,7 @@ SocketClient::manageMessage(uint8_t *message_bin_buf,size_t bufsize) {
 		ldmmap::vehicleData_t vehdata;
 		ldmmap::LDMMap::LDMMap_error_t db_retval;
 
-		vehdata.exteriorLights = manage_LowfreqContainer(decoded_cam,stationID);
+		vehdata.exteriorLights = manage_LowfreqContainer(decodedData.decoded_msg,stationID);
 
 		uint64_t gn_timestamp;
 		if(decodedData.type == etsiDecoder::ETSI_DECODED_CAM) {
@@ -335,48 +355,69 @@ SocketClient::manageMessage(uint8_t *message_bin_buf,size_t bufsize) {
 		vehdata.lon = lon;
 		vehdata.lat = lat;
 		vehdata.timestamp_us = get_timestamp_us();
-		vehdata.elevation = decoded_cam->cam.camParameters.basicContainer.referencePosition.altitude.altitudeValue/100.0;
-		vehdata.heading = decoded_cam->cam.camParameters.highFrequencyContainer.choice.basicVehicleContainerHighFrequency.heading.headingValue/10.0;
-		vehdata.speed_ms = decoded_cam->cam.camParameters.highFrequencyContainer.choice.basicVehicleContainerHighFrequency.speed.speedValue/100.0;
-		vehdata.gnTimestamp = gn_timestamp;
-		vehdata.stationID = stationID; // It is very important to save also the stationID
-		vehdata.camTimestamp = static_cast<long>(decoded_cam->cam.generationDeltaTime);
-		vehdata.stationType = static_cast<ldmmap::e_StationTypeLDM>(decoded_cam->cam.camParameters.basicContainer.stationType);
-		memcpy(vehdata.macaddr,decodedData.GNaddress,6); // Save the vehicle MAC address into the database
 
-		// Part specific to AIM: try to retrieve data also from a possible, proposed, channel load and node status container
-		if(decoded_cam->cam.camParameters.channelNodeStatusContainer!=nullptr) {
-			vehdata.cpu_load_perc = 
-				decoded_cam->cam.camParameters.channelNodeStatusContainer->cpuLoad==CPULoad_unavailable ?
-				CPULOAD_UNAVAILABLE :
-				decoded_cam->cam.camParameters.channelNodeStatusContainer->cpuLoad/100.0;
-
-			vehdata.ram_load_MB = 
-				decoded_cam->cam.camParameters.channelNodeStatusContainer->ramLoad==RAMLoad_unavailable ?
-				RAMLOAD_UNAVAILABLE :
-				static_cast<double>(decoded_cam->cam.camParameters.channelNodeStatusContainer->ramLoad);
-
-			if(decoded_cam->cam.camParameters.channelNodeStatusContainer->auxilliaryLinkMac!=nullptr) {
-				// If the size is different than 6, this is not a MAC address, so it should not be processed
-				if(decoded_cam->cam.camParameters.channelNodeStatusContainer->auxilliaryLinkMac->size!=6) {
-					// NEED TO MANAGE THE OCTET STRING AND CONVERT THE HEX VALUES INTO AN HEX std::string
-					// THE VALUES SHALL THEN BE STORED INTO vehdata.auxiliary_macaddr
-					char c_str_macaddr[18]; // 12 characters + 5 ":" + "\0"
-
-					std::snprintf(c_str_macaddr,18,"%02X:%02X:%02X:%02X:%02X:%02X",
-						decoded_cam->cam.camParameters.channelNodeStatusContainer->auxilliaryLinkMac->buf[0],
-						decoded_cam->cam.camParameters.channelNodeStatusContainer->auxilliaryLinkMac->buf[1],
-						decoded_cam->cam.camParameters.channelNodeStatusContainer->auxilliaryLinkMac->buf[2],
-						decoded_cam->cam.camParameters.channelNodeStatusContainer->auxilliaryLinkMac->buf[3],
-						decoded_cam->cam.camParameters.channelNodeStatusContainer->auxilliaryLinkMac->buf[4],
-						decoded_cam->cam.camParameters.channelNodeStatusContainer->auxilliaryLinkMac->buf[5]);
-
-					vehdata.auxiliary_macaddr=std::string(c_str_macaddr);
-				}
-			}
+		if(m_opts_ptr->enable_enhanced_CAMs==true) {
+			vehdata.elevation = decoded_encam->cam.camParameters.basicContainer.referencePosition.altitude.altitudeValue/100.0;
+			vehdata.heading = decoded_encam->cam.camParameters.highFrequencyContainer.choice.basicVehicleContainerHighFrequency.heading.headingValue/10.0;
+			vehdata.speed_ms = decoded_encam->cam.camParameters.highFrequencyContainer.choice.basicVehicleContainerHighFrequency.speed.speedValue/100.0;
+			vehdata.camTimestamp = static_cast<long>(decoded_encam->cam.generationDeltaTime);
+			vehdata.stationType = static_cast<ldmmap::e_StationTypeLDM>(decoded_encam->cam.camParameters.basicContainer.stationType);
+		} else {
+			vehdata.elevation = decoded_cam->cam.camParameters.basicContainer.referencePosition.altitude.altitudeValue/100.0;
+			vehdata.heading = decoded_cam->cam.camParameters.highFrequencyContainer.choice.basicVehicleContainerHighFrequency.heading.headingValue/10.0;
+			vehdata.speed_ms = decoded_cam->cam.camParameters.highFrequencyContainer.choice.basicVehicleContainerHighFrequency.speed.speedValue/100.0;
+			vehdata.camTimestamp = static_cast<long>(decoded_cam->cam.generationDeltaTime);
+			vehdata.stationType = static_cast<ldmmap::e_StationTypeLDM>(decoded_cam->cam.camParameters.basicContainer.stationType);
 		}
 
-		// Retrieve, if available, the information on the RSSI for the vehicle corresponding to that MAC address
+		vehdata.gnTimestamp = gn_timestamp;
+		vehdata.stationID = stationID; // It is very important to save also the stationID
+		memcpy(vehdata.macaddr,decodedData.GNaddress,6); // Save the vehicle MAC address into the database
+
+		if(m_opts_ptr->enable_enhanced_CAMs==true) {
+			// Part specific to AIM: try to retrieve data also from a possible, proposed, channel load and node status container
+			if(decoded_encam->cam.camParameters.channelNodeStatusContainer!=nullptr) {
+				vehdata.cpu_load_perc = 
+					decoded_encam->cam.camParameters.channelNodeStatusContainer->cpuLoad==CPULoad_unavailable ?
+					CPULOAD_UNAVAILABLE :
+					decoded_encam->cam.camParameters.channelNodeStatusContainer->cpuLoad/100.0;
+
+				vehdata.ram_load_MB = 
+					decoded_encam->cam.camParameters.channelNodeStatusContainer->ramLoad==RAMLoad_unavailable ?
+					RAMLOAD_UNAVAILABLE :
+					static_cast<double>(decoded_encam->cam.camParameters.channelNodeStatusContainer->ramLoad);
+
+				if(decoded_encam->cam.camParameters.channelNodeStatusContainer->auxilliaryLinkMac!=nullptr) {
+					// If the size is different than 6, this is not a MAC address, so it should not be processed
+					if(decoded_encam->cam.camParameters.channelNodeStatusContainer->auxilliaryLinkMac->size!=6) {
+						// NEED TO MANAGE THE OCTET STRING AND CONVERT THE HEX VALUES INTO AN HEX std::string
+						// THE VALUES SHALL THEN BE STORED INTO vehdata.auxiliary_macaddr
+						char c_str_macaddr[18]; // 12 characters + 5 ":" + "\0"
+
+						std::snprintf(c_str_macaddr,18,"%02X:%02X:%02X:%02X:%02X:%02X",
+							decoded_encam->cam.camParameters.channelNodeStatusContainer->auxilliaryLinkMac->buf[0],
+							decoded_encam->cam.camParameters.channelNodeStatusContainer->auxilliaryLinkMac->buf[1],
+							decoded_encam->cam.camParameters.channelNodeStatusContainer->auxilliaryLinkMac->buf[2],
+							decoded_encam->cam.camParameters.channelNodeStatusContainer->auxilliaryLinkMac->buf[3],
+							decoded_encam->cam.camParameters.channelNodeStatusContainer->auxilliaryLinkMac->buf[4],
+							decoded_encam->cam.camParameters.channelNodeStatusContainer->auxilliaryLinkMac->buf[5]);
+
+						vehdata.auxiliary_macaddr=std::string(c_str_macaddr);
+					} else {
+						vehdata.auxiliary_macaddr="unavailable";
+					}
+				} else {
+					vehdata.auxiliary_macaddr="unavailable";
+				}
+			}
+		} else {
+			vehdata.auxiliary_macaddr="unavailable";
+			vehdata.cpu_load_perc=CPULOAD_UNAVAILABLE;
+			vehdata.ram_load_MB=RAMLOAD_UNAVAILABLE;
+		}
+
+		// Retrieve, if available, the information on the RSSI for the vehicle corresponding to the MAC address of the sender
+		// This is the RSSI on the CAM dissemination interface
 		struct iw_statistics wifistats;
 		struct iwreq wifireq;
 		strncpy(wifireq.ifr_name,options_string_pop(m_opts_ptr->udp_interface),IFNAMSIZ);
@@ -391,7 +432,7 @@ SocketClient::manageMessage(uint8_t *message_bin_buf,size_t bufsize) {
 
 		// Retrieve, if available, the information on the RSSI for a connected auxiliary device, via ssh
 		// This information is retrieved only if specified by the user
-		if(m_opts_ptr->rssi_aux_update_interval_msec>=0) {
+		if(m_opts_ptr->rssi_aux_update_interval_msec>=0 && vehdata.auxiliary_macaddr!="unavailable") {
 			m_routeros_rssi_mutex.lock();
 			
 			if(m_routeros_rssi.count(vehdata.auxiliary_macaddr)>0) {
@@ -403,16 +444,30 @@ SocketClient::manageMessage(uint8_t *message_bin_buf,size_t bufsize) {
 			m_routeros_rssi_mutex.unlock();
 		}
 
-		if(decoded_cam->cam.camParameters.highFrequencyContainer.choice.basicVehicleContainerHighFrequency.vehicleWidth != VehicleWidth_unavailable) {
-			vehdata.vehicleWidth = ldmmap::OptionalDataItem<long>(decoded_cam->cam.camParameters.highFrequencyContainer.choice.basicVehicleContainerHighFrequency.vehicleWidth*100);
-		} else {
-			vehdata.vehicleWidth = ldmmap::OptionalDataItem<long>(false);
-		}
+		if(m_opts_ptr->enable_enhanced_CAMs==true) {
+			if(decoded_encam->cam.camParameters.highFrequencyContainer.choice.basicVehicleContainerHighFrequency.vehicleWidth != VehicleWidth_unavailable) {
+				vehdata.vehicleWidth = ldmmap::OptionalDataItem<long>(decoded_encam->cam.camParameters.highFrequencyContainer.choice.basicVehicleContainerHighFrequency.vehicleWidth*100);
+			} else {
+				vehdata.vehicleWidth = ldmmap::OptionalDataItem<long>(false);
+			}
 
-		if(decoded_cam->cam.camParameters.highFrequencyContainer.choice.basicVehicleContainerHighFrequency.vehicleLength.vehicleLengthValue != VehicleLengthValue_unavailable) {
-			vehdata.vehicleLength = ldmmap::OptionalDataItem<long>(decoded_cam->cam.camParameters.highFrequencyContainer.choice.basicVehicleContainerHighFrequency.vehicleLength.vehicleLengthValue*100);
+			if(decoded_encam->cam.camParameters.highFrequencyContainer.choice.basicVehicleContainerHighFrequency.vehicleLength.vehicleLengthValue != VehicleLengthValue_unavailable) {
+				vehdata.vehicleLength = ldmmap::OptionalDataItem<long>(decoded_encam->cam.camParameters.highFrequencyContainer.choice.basicVehicleContainerHighFrequency.vehicleLength.vehicleLengthValue*100);
+			} else {
+				vehdata.vehicleLength = ldmmap::OptionalDataItem<long>(false);
+			}
 		} else {
-			vehdata.vehicleLength = ldmmap::OptionalDataItem<long>(false);
+			if(decoded_cam->cam.camParameters.highFrequencyContainer.choice.basicVehicleContainerHighFrequency.vehicleWidth != VehicleWidth_unavailable) {
+				vehdata.vehicleWidth = ldmmap::OptionalDataItem<long>(decoded_cam->cam.camParameters.highFrequencyContainer.choice.basicVehicleContainerHighFrequency.vehicleWidth*100);
+			} else {
+				vehdata.vehicleWidth = ldmmap::OptionalDataItem<long>(false);
+			}
+
+			if(decoded_cam->cam.camParameters.highFrequencyContainer.choice.basicVehicleContainerHighFrequency.vehicleLength.vehicleLengthValue != VehicleLengthValue_unavailable) {
+				vehdata.vehicleLength = ldmmap::OptionalDataItem<long>(decoded_cam->cam.camParameters.highFrequencyContainer.choice.basicVehicleContainerHighFrequency.vehicleLength.vehicleLengthValue*100);
+			} else {
+				vehdata.vehicleLength = ldmmap::OptionalDataItem<long>(false);
+			}
 		}
 
 		// If logging is enabled, compute also an "instantaneous update period" metric (i.e., how much time has passed between two consecutive vehicle updates)
@@ -439,24 +494,38 @@ SocketClient::manageMessage(uint8_t *message_bin_buf,size_t bufsize) {
 
 			fprintf(m_logfile_file,"[LOG - DATABASE UPDATE (Client %s)] LowFrequencyContainerAvail=%d InsertReturnValue=%d ProcTimeMilliseconds=%.6lf\n",
 				m_client_id.c_str(),
-				decoded_cam->cam.camParameters.highFrequencyContainer.choice.basicVehicleContainerHighFrequency.vehicleWidth != VehicleWidth_unavailable,
+				m_opts_ptr->enable_enhanced_CAMs==true ? 
+					decoded_encam->cam.camParameters.highFrequencyContainer.choice.basicVehicleContainerHighFrequency.vehicleWidth != VehicleWidth_unavailable :
+					decoded_cam->cam.camParameters.highFrequencyContainer.choice.basicVehicleContainerHighFrequency.vehicleWidth != VehicleWidth_unavailable,
 				db_retval,
 				(af-bf)/1000000.0);
 		}
 
-		ASN_STRUCT_FREE(asn_DEF_CAM,decoded_cam);
+		if(m_opts_ptr->enable_enhanced_CAMs==true) {
+			ASN_STRUCT_FREE(asn_DEF_CAM,decoded_cam);
+		} else {
+			ASN_STRUCT_FREE(asn_DEF_CAMEnhanced,decoded_encam);
+		}
+
+		std::cout << "[TBR] StationID = " << stationID << std::endl;
 
 		if(m_logfile_name!="") {
 			main_af=get_timestamp_ns();
 
-			logfprintf(m_logfile_file,std::string("FULL CAM PROCESSING (Client") + m_client_id + std::string(")"),"StationID=%u Coordinates=%.7lf:%.7lf Heading=%.1lf InstUpdatePeriod=%.3lf"
+			logfprintf(m_logfile_file,std::string("FULL CAM PROCESSING (Client ") + m_client_id + std::string(")"),"StationID=%u Coordinates=%.7lf:%.7lf Heading=%.1lf InstUpdatePeriod=%.3lf"
 				" CAMTimestamp=%ld GNTimestamp=%lu CAMTimestampDiff=%ld GNTimestampDiff=%ld"
-				" ProcTimeMilliseconds=%.6lf\n",
+				" ProcTimeMilliseconds=%.6lf EnhancedCAMsEnabled=%d CPULoadPerc=%.2lf FreeRAMMB=%.2lf MAC_Addr=%02X:%02X:%02X:%02X:%02X:%02X"
+				" Aux_MAC_Addr=%s\n",
 				stationID,lat,lon,
 				vehdata.heading,
 				l_inst_period,
 				vehdata.camTimestamp,vehdata.gnTimestamp,get_timestamp_ms_cam()-vehdata.camTimestamp,get_timestamp_ms_gn()-vehdata.gnTimestamp,
-				(main_af-main_bf)/1000000.0);
+				(main_af-main_bf)/1000000.0,
+				m_opts_ptr->enable_enhanced_CAMs,
+				vehdata.cpu_load_perc,
+				vehdata.ram_load_MB,
+				vehdata.macaddr[0],vehdata.macaddr[1],vehdata.macaddr[2],vehdata.macaddr[3],vehdata.macaddr[4],vehdata.macaddr[5],
+				vehdata.auxiliary_macaddr.c_str());
 			
 			// fprintf(m_logfile_file,"[LOG - FULL CAM PROCESSING] StationID=%u Coordinates=%.7lf:%.7lf InstUpdatePeriod=%.3lf"
 			// 	" CAMTimestamp=%ld GNTimestamp=%lu CAMTimestampDiff=%ld GNTimestampDiff=%ld"

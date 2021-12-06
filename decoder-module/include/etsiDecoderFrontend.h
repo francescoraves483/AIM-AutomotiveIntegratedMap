@@ -62,9 +62,12 @@ namespace etsiDecoder {
 			decoderFrontend();
 			int decodeEtsi(uint8_t *buffer,size_t buflen,etsiDecodedData_t &decoded_data, msgType_e msgtype = MSGTYPE_ITS);
 			void setPrintPacket(bool print_pkt) {m_print_pkt=print_pkt;}
+			void enableEnhancedCAMs() {m_enhanced_CAMs=true;}
+			void disableEnhancedCAMs() {m_enhanced_CAMs=false;}
 
 		private:
 			bool m_print_pkt;
+			bool m_enhanced_CAMs;
 	};
 }
 

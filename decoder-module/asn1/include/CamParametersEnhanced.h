@@ -4,8 +4,8 @@
  * 	found in "./ASNfiles/ETSI CAM v1.4.1enh.asn"
  */
 
-#ifndef	_CamParameters_H_
-#define	_CamParameters_H_
+#ifndef	_CamParametersEnhanced_H_
+#define	_CamParametersEnhanced_H_
 
 
 #include "asn_application.h"
@@ -22,13 +22,15 @@ extern "C" {
 /* Forward declarations */
 struct LowFrequencyContainer;
 struct SpecialVehicleContainer;
+struct ChannelNodeStatusContainer;
 
-/* CamParameters */
-typedef struct CamParameters {
+/* CamParametersEnhanced */
+typedef struct CamParametersEnhanced {
 	BasicContainer_t	 basicContainer;
 	HighFrequencyContainer_t	 highFrequencyContainer;
 	struct LowFrequencyContainer	*lowFrequencyContainer	/* OPTIONAL */;
 	struct SpecialVehicleContainer	*specialVehicleContainer	/* OPTIONAL */;
+	struct ChannelNodeStatusContainer	*channelNodeStatusContainer	/* OPTIONAL */;
 	/*
 	 * This type is extensible,
 	 * possible extensions are below.
@@ -36,12 +38,12 @@ typedef struct CamParameters {
 	
 	/* Context for parsing across buffer boundaries */
 	asn_struct_ctx_t _asn_ctx;
-} CamParameters_t;
+} CamParametersEnhanced_t;
 
 /* Implementation */
-extern asn_TYPE_descriptor_t asn_DEF_CamParameters;
-extern asn_SEQUENCE_specifics_t asn_SPC_CamParameters_specs_1;
-extern asn_TYPE_member_t asn_MBR_CamParameters_1[4];
+extern asn_TYPE_descriptor_t asn_DEF_CamParametersEnhanced;
+extern asn_SEQUENCE_specifics_t asn_SPC_CamParametersEnhanced_specs_1;
+extern asn_TYPE_member_t asn_MBR_CamParametersEnhanced_1[5];
 
 #ifdef __cplusplus
 }
@@ -50,6 +52,7 @@ extern asn_TYPE_member_t asn_MBR_CamParameters_1[4];
 /* Referred external types */
 #include "LowFrequencyContainer.h"
 #include "SpecialVehicleContainer.h"
+#include "ChannelNodeStatusContainer.h"
 
-#endif	/* _CamParameters_H_ */
+#endif	/* _CamParametersEnhanced_H_ */
 #include "asn_internal.h"

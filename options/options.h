@@ -49,10 +49,13 @@
 #define DEFAULT_IFACE "wlan0"
 #define DEFAULT_UDP_PORT 47101
 
+// Default IP address for the connected auxiliary device
+#define DEFAULT_AUX_IP "192.168.88.2"
+
 // Valid options
 // Any new option should be handled in the switch-case inside parse_options() and the corresponding char should be added to VALID_OPTS
 // If an option accepts an additional argument, it is followed by ':'
-#define VALID_OPTS "hvZ:z:w:L:gi:p:R:"
+#define VALID_OPTS "hvZ:z:w:L:gi:p:R:E"
 
 #define INIT_CODE 0xAE
 
@@ -81,6 +84,10 @@ typedef struct options {
 	bool ageCheck_enabled; // (-g option to set this to 'false') 'true' if an 'age check' on the received data should be performed before updating the database, 'false' otherwise. Default: 'true'.
 
 	double rssi_aux_update_interval_msec; // If set to <=0 (default value), the auxialiary RouterOS-based device RSSI retrieval will be disabled
+
+	options_string auxiliary_device_ip_addr;
+
+	bool enable_enhanced_CAMs;
 } options_t;
 
 void options_initialize(struct options *options);
