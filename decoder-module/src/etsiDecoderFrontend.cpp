@@ -82,8 +82,8 @@ namespace etsiDecoder {
 			}
 
 			decoded_data.gnTimestamp = gndataIndication.SourcePV.TST;
-			// Save only the MAC address, extracted from the GN Address
-			memcpy(decoded_data.GNaddress,gndataIndication.SourcePV.GnAddress,6);
+			// Save the GN Address
+			memcpy(decoded_data.GNaddress,gndataIndication.SourcePV.GnAddress,8);
 
 			if(btpDataIndication.destPort == CA_PORT) {
 				decoded_data.type = ETSI_DECODED_CAM;

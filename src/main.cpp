@@ -254,6 +254,8 @@ int main(int argc, char **argv) {
 			// Set the "self" MAC address, so that all the messages coming from this address will be discarded
 			mainRecvClient.setSelfMAC(dissem_vif_mac);
 
+			fprintf(stdout,"Reception is going to start very soon...\n");
+
 			// Start the reception of V2X messages
 			mainRecvClient.startReception();
 		}

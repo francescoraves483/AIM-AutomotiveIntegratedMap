@@ -27,71 +27,71 @@
 		      } \
 		}
 
-void
-SocketClient::routerOS_RSSI_retriever(void) {
-	// Create a new timer
-	struct pollfd pollfddata;
-	int clockFd;
+// void
+// SocketClient::routerOS_RSSI_retriever(void) {
+// 	// Create a new timer
+// 	struct pollfd pollfddata;
+// 	int clockFd;
 
-	// Popen buffer
-	char popen_buff[2000];
+// 	// Popen buffer
+// 	char popen_buff[2000];
 
-	if(timer_fd_create(pollfddata, clockFd, m_opts_ptr->rssi_aux_update_interval_msec*1e3)<0) {
-		std::cerr << "[ERROR] Fatal error! Cannot create timer for the routerOS RSSI retriever thread. No RSSI data will be available." << std::endl;
-		m_routeros_rssi={};
-		return;
-	}
+// 	if(timer_fd_create(pollfddata, clockFd, m_opts_ptr->rssi_aux_update_interval_msec*1e3)<0) {
+// 		std::cerr << "[ERROR] Fatal error! Cannot create timer for the routerOS RSSI retriever thread. No RSSI data will be available." << std::endl;
+// 		m_routeros_rssi={};
+// 		return;
+// 	}
 
-	POLL_DEFINE_JUNK_VARIABLE();
+// 	POLL_DEFINE_JUNK_VARIABLE();
 
-	while(m_terminate_routeros_rssi_flag==false) {
-		if(poll(&pollfddata,1,0)>0) {
-			POLL_CLEAR_EVENT(clockFd);
+// 	while(m_terminate_routeros_rssi_flag==false) {
+// 		if(poll(&pollfddata,1,0)>0) {
+// 			POLL_CLEAR_EVENT(clockFd);
 
-			// Original command via ssh: ssh admin@192.168.88.2 interface w60g monitor wlan60-1 once | grep -E "rssi|remote-address"
-			std::string ssh_command = "stdbuf -o L ssh admin@" + std::string(options_string_pop(m_opts_ptr->auxiliary_device_ip_addr)) + " interface w60g monitor wlan60-1 once | stdbuf -o L grep -E \"rssi|remote-address\"";
-			FILE *ssh = popen(ssh_command.c_str(),"r");
+// 			// Original command via ssh: ssh admin@192.168.88.2 interface w60g monitor wlan60-1 once | grep -E "rssi|remote-address"
+// 			std::string ssh_command = "stdbuf -o L ssh admin@" + std::string(options_string_pop(m_opts_ptr->auxiliary_device_ip_addr)) + " interface w60g monitor wlan60-1 once | stdbuf -o L grep -E \"rssi|remote-address\"";
+// 			FILE *ssh = popen(ssh_command.c_str(),"r");
 
-			if(ssh==NULL) {
-				// Sleep at least 1 second, and then try again after a timer expiration
-				sleep(1);
-				continue;
-			}
+// 			if(ssh==NULL) {
+// 				// Sleep at least 1 second, and then try again after a timer expiration
+// 				sleep(1);
+// 				continue;
+// 			}
 
-			std::vector<std::string> m_remotes;
+// 			std::vector<std::string> m_remotes;
 
-			while(fgets(popen_buff,2000,ssh)!=NULL) {
-				char* pch;
-				if(strstr(popen_buff,"remote-address")) {
-					m_remotes.clear();
+// 			while(fgets(popen_buff,2000,ssh)!=NULL) {
+// 				char* pch;
+// 				if(strstr(popen_buff,"remote-address")) {
+// 					m_remotes.clear();
 
-					pch=strtok(popen_buff,":");
-					pch=strtok(NULL," ,");
+// 					pch=strtok(popen_buff,":");
+// 					pch=strtok(NULL," ,");
 
-					while(pch!=nullptr) {
-						std::string pchstr=std::string(pch);
-						pchstr.erase(std::remove_if(pchstr.begin(), pchstr.end(), isspace), pchstr.end());
-						m_remotes.push_back(pchstr);
+// 					while(pch!=nullptr) {
+// 						std::string pchstr=std::string(pch);
+// 						pchstr.erase(std::remove_if(pchstr.begin(), pchstr.end(), isspace), pchstr.end());
+// 						m_remotes.push_back(pchstr);
 
-						pch=strtok(NULL, " ,");
-				  	}
-				} else if(strstr(popen_buff,"rssi")) {
-					pch = strtok (popen_buff,":");
-					pch = strtok (NULL," ,");
+// 						pch=strtok(NULL, " ,");
+// 				  	}
+// 				} else if(strstr(popen_buff,"rssi")) {
+// 					pch = strtok (popen_buff,":");
+// 					pch = strtok (NULL," ,");
 
-					m_routeros_rssi_mutex.lock();
-					for(int i=0;i<m_remotes.size() && pch!=NULL;i++) {
-						m_routeros_rssi[m_remotes[i]]=atoi(pch);
-						pch=strtok(NULL, " ,");
-					}
-					m_routeros_rssi_mutex.unlock();
-				}
-			}
-		}
-	}
+// 					m_routeros_rssi_mutex.lock();
+// 					for(int i=0;i<m_remotes.size() && pch!=NULL;i++) {
+// 						m_routeros_rssi[m_remotes[i]]=strtod(pch,nullptr);
+// 						pch=strtok(NULL, " ,");
+// 					}
+// 					m_routeros_rssi_mutex.unlock();
+// 				}
+// 			}
+// 		}
+// 	}
 
-	close(clockFd);
-}
+// 	close(clockFd);
+// }
 
 // If this is a full ITS message manage the low frequency container data
 // Check if this CAM contains the low frequency container
@@ -158,7 +158,7 @@ SocketClient::rxThr(void) {
 				}
 
 				// A message from myself has been received -> this message should be discarded
-				if(m_self_mac_set==false && compare_mac(etherHeaderPtr->ether_shost,m_self_mac)==true) {
+				if(m_self_mac_set==true && compare_mac(etherHeaderPtr->ether_shost,m_self_mac)==true) {
 					continue;
 				}
 
@@ -209,10 +209,10 @@ SocketClient::startReception(void) {
 		}
 		
 		std::thread runningRxThr(&SocketClient::rxThr,this);
-		if(m_opts_ptr->rssi_aux_update_interval_msec>0) {
-			std::thread runningRouterOSRSSIThr(&SocketClient::routerOS_RSSI_retriever,this);
-			runningRouterOSRSSIThr.join();
-		}
+		// if(m_opts_ptr->rssi_aux_update_interval_msec>0) {
+		// 	std::thread runningRouterOSRSSIThr(&SocketClient::routerOS_RSSI_retriever,this);
+		// 	runningRouterOSRSSIThr.join();
+		// }
 
 		runningRxThr.join();
 	}
@@ -220,7 +220,7 @@ SocketClient::startReception(void) {
 
 void 
 SocketClient::stopReception(void) {
-	m_terminate_routeros_rssi_flag=true;
+	// m_terminate_routeros_rssi_flag=true;
 
 	if(m_unlock_pd_rd!=-1 && m_unlock_pd_wr!=-1) {
 		if(write(m_unlock_pd_wr,"\0",1)<0) {
@@ -236,6 +236,7 @@ SocketClient::stopReception(void) {
 void 
 SocketClient::manageMessage(uint8_t *message_bin_buf,size_t bufsize) {
 	etsiDecoder::etsiDecodedData_t decodedData;
+	char popen_iw_buff[POPEN_IW_BUFF_SIZE];
 
 	uint64_t bf = 0.0,af = 0.0;
 	uint64_t main_bf = 0.0,main_af = 0.0;
@@ -372,7 +373,7 @@ SocketClient::manageMessage(uint8_t *message_bin_buf,size_t bufsize) {
 
 		vehdata.gnTimestamp = gn_timestamp;
 		vehdata.stationID = stationID; // It is very important to save also the stationID
-		memcpy(vehdata.macaddr,decodedData.GNaddress,6); // Save the vehicle MAC address into the database
+		memcpy(vehdata.macaddr,&(decodedData.GNaddress[0])+2,6); // Save the vehicle MAC address into the database (the MAC address is stored in the last 6 Bytes of the GN Address)
 
 		if(m_opts_ptr->enable_enhanced_CAMs==true) {
 			// Part specific to AIM: try to retrieve data also from a possible, proposed, channel load and node status container
@@ -387,11 +388,14 @@ SocketClient::manageMessage(uint8_t *message_bin_buf,size_t bufsize) {
 					RAMLOAD_UNAVAILABLE :
 					static_cast<double>(decoded_encam->cam.camParameters.channelNodeStatusContainer->ramLoad);
 
+				vehdata.rssi_auxiliary_dBm = 
+					decoded_encam->cam.camParameters.channelNodeStatusContainer->auxilliaryLinkRSSI==nullptr ?
+					RSSI_UNAVAILABLE :
+					*(decoded_encam->cam.camParameters.channelNodeStatusContainer->auxilliaryLinkRSSI)/100.0;
+
 				if(decoded_encam->cam.camParameters.channelNodeStatusContainer->auxilliaryLinkMac!=nullptr) {
 					// If the size is different than 6, this is not a MAC address, so it should not be processed
-					if(decoded_encam->cam.camParameters.channelNodeStatusContainer->auxilliaryLinkMac->size!=6) {
-						// NEED TO MANAGE THE OCTET STRING AND CONVERT THE HEX VALUES INTO AN HEX std::string
-						// THE VALUES SHALL THEN BE STORED INTO vehdata.auxiliary_macaddr
+					if(decoded_encam->cam.camParameters.channelNodeStatusContainer->auxilliaryLinkMac->size==6) {
 						char c_str_macaddr[18]; // 12 characters + 5 ":" + "\0"
 
 						std::snprintf(c_str_macaddr,18,"%02X:%02X:%02X:%02X:%02X:%02X",
@@ -414,35 +418,75 @@ SocketClient::manageMessage(uint8_t *message_bin_buf,size_t bufsize) {
 			vehdata.auxiliary_macaddr="unavailable";
 			vehdata.cpu_load_perc=CPULOAD_UNAVAILABLE;
 			vehdata.ram_load_MB=RAMLOAD_UNAVAILABLE;
+			vehdata.rssi_auxiliary_dBm=RSSI_UNAVAILABLE;
 		}
 
 		// Retrieve, if available, the information on the RSSI for the vehicle corresponding to the MAC address of the sender
 		// This is the RSSI on the CAM dissemination interface
-		struct iw_statistics wifistats;
-		struct iwreq wifireq;
-		strncpy(wifireq.ifr_name,options_string_pop(m_opts_ptr->udp_interface),IFNAMSIZ);
-		wifireq.u.data.pointer=&wifistats;
-		wifireq.u.data.length = sizeof(wifistats);
 
-		if(ioctl(m_raw_rx_sock,SIOCGIWSTATS,&wifireq) == -1 || !(wifistats.qual.updated & IW_QUAL_DBM)) {
-			vehdata.rssi_dBm=RSSI_UNAVAILABLE;
-		} else {
-			vehdata.rssi_dBm=wifistats.qual.level;
+		// ioctl() does not seem to work for some drivers, which are instead using nl80211
+		// The following code is a "quick and dirty" way of getting the RSSI, leveraging popen and calling the iw tool
+		// This part should hopefully be converted to the usage of nl80211 in the near future
+		// struct iw_statistics wifistats;
+		// struct iwreq wifireq;
+		// strncpy(wifireq.ifr_name,options_string_pop(m_opts_ptr->udp_interface),IFNAMSIZ);
+		// wifireq.u.data.pointer=&wifistats;
+		// wifireq.u.data.length = sizeof(wifistats);
+
+		// if(ioctl(m_raw_rx_sock,SIOCGIWSTATS,&wifireq) == -1 || !(wifistats.qual.updated & IW_QUAL_DBM)) {
+		// 	vehdata.rssi_dBm=RSSI_UNAVAILABLE;
+		// } else {
+		// 	vehdata.rssi_dBm=wifistats.qual.level;
+		// }
+
+		std::string ssh_command = "stdbuf -o L iw dev " + std::string(options_string_pop(m_opts_ptr->udp_interface)) + " station dump | stdbuf -o L grep -E \"signal:|Station\" | tr -d '\t' | tr -s ' '";
+		FILE *ssh = popen(ssh_command.c_str(),"r");
+
+		vehdata.rssi_dBm=RSSI_UNAVAILABLE;
+		
+		while(ssh!=nullptr && fgets(popen_iw_buff,POPEN_IW_BUFF_SIZE,ssh)!=NULL) {
+			char* pch=nullptr;
+			pch=strtok(popen_iw_buff," ,");
+			if(strstr(pch,"Station")) {
+				char mac[18];
+				std::snprintf(mac,18,"%02X:%02X:%02X:%02X:%02X:%02X",
+					vehdata.macaddr[0],
+					vehdata.macaddr[1],
+					vehdata.macaddr[2],
+					vehdata.macaddr[3],
+					vehdata.macaddr[4],
+					vehdata.macaddr[5]);
+
+				pch=strtok(NULL," ,");
+				
+				if(std::string(pch)!=std::string(mac)) {
+					// Skip the RSSI/"signal:" line if the MAC is not the one of interest
+					pch=strtok(NULL," ,");
+				}
+			} else if(strstr(pch,"signal:")) {
+				pch=strtok(NULL," ,");
+
+				// This is the desired RSSI/"signal" value
+				vehdata.rssi_dBm=strtod(pch,nullptr);
+				
+				break;
+			}
 		}
 
+		// ----- This part has been disabled as the used mmWave devices are unable to establish point-to-point links, thus the RSSI information between the other devices and the AP shall be received via CAMs -----
 		// Retrieve, if available, the information on the RSSI for a connected auxiliary device, via ssh
 		// This information is retrieved only if specified by the user
-		if(m_opts_ptr->rssi_aux_update_interval_msec>=0 && vehdata.auxiliary_macaddr!="unavailable") {
-			m_routeros_rssi_mutex.lock();
+		// if(m_opts_ptr->rssi_aux_update_interval_msec>=0 && vehdata.auxiliary_macaddr!="unavailable") {
+		// 	m_routeros_rssi_mutex.lock();
 			
-			if(m_routeros_rssi.count(vehdata.auxiliary_macaddr)>0) {
-				vehdata.rssi_auxiliary_dBm=m_routeros_rssi[vehdata.auxiliary_macaddr];
-			} else {
-				vehdata.rssi_auxiliary_dBm=RSSI_UNAVAILABLE;
-			}
+		// 	if(m_routeros_rssi.count(vehdata.auxiliary_macaddr)>0) {
+		// 		vehdata.rssi_auxiliary_dBm=m_routeros_rssi[vehdata.auxiliary_macaddr];
+		// 	} else {
+		// 		vehdata.rssi_auxiliary_dBm=RSSI_UNAVAILABLE;
+		// 	}
 
-			m_routeros_rssi_mutex.unlock();
-		}
+		// 	m_routeros_rssi_mutex.unlock();
+		// }
 
 		if(m_opts_ptr->enable_enhanced_CAMs==true) {
 			if(decoded_encam->cam.camParameters.highFrequencyContainer.choice.basicVehicleContainerHighFrequency.vehicleWidth != VehicleWidth_unavailable) {
@@ -507,15 +551,13 @@ SocketClient::manageMessage(uint8_t *message_bin_buf,size_t bufsize) {
 			ASN_STRUCT_FREE(asn_DEF_CAMEnhanced,decoded_encam);
 		}
 
-		std::cout << "[TBR] StationID = " << stationID << std::endl;
-
 		if(m_logfile_name!="") {
 			main_af=get_timestamp_ns();
 
 			logfprintf(m_logfile_file,std::string("FULL CAM PROCESSING (Client ") + m_client_id + std::string(")"),"StationID=%u Coordinates=%.7lf:%.7lf Heading=%.1lf InstUpdatePeriod=%.3lf"
 				" CAMTimestamp=%ld GNTimestamp=%lu CAMTimestampDiff=%ld GNTimestampDiff=%ld"
 				" ProcTimeMilliseconds=%.6lf EnhancedCAMsEnabled=%d CPULoadPerc=%.2lf FreeRAMMB=%.2lf MAC_Addr=%02X:%02X:%02X:%02X:%02X:%02X"
-				" Aux_MAC_Addr=%s\n",
+				" Aux_MAC_Addr=%s RSSI=%.2lf Aux_RSSI=%.2lf\n",
 				stationID,lat,lon,
 				vehdata.heading,
 				l_inst_period,
@@ -525,7 +567,9 @@ SocketClient::manageMessage(uint8_t *message_bin_buf,size_t bufsize) {
 				vehdata.cpu_load_perc,
 				vehdata.ram_load_MB,
 				vehdata.macaddr[0],vehdata.macaddr[1],vehdata.macaddr[2],vehdata.macaddr[3],vehdata.macaddr[4],vehdata.macaddr[5],
-				vehdata.auxiliary_macaddr.c_str());
+				vehdata.auxiliary_macaddr.c_str(),
+				vehdata.rssi_dBm,
+				vehdata.rssi_auxiliary_dBm);
 			
 			// fprintf(m_logfile_file,"[LOG - FULL CAM PROCESSING] StationID=%u Coordinates=%.7lf:%.7lf InstUpdatePeriod=%.3lf"
 			// 	" CAMTimestamp=%ld GNTimestamp=%lu CAMTimestampDiff=%ld GNTimestampDiff=%ld"

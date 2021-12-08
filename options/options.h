@@ -83,7 +83,8 @@ typedef struct options {
 
 	bool ageCheck_enabled; // (-g option to set this to 'false') 'true' if an 'age check' on the received data should be performed before updating the database, 'false' otherwise. Default: 'true'.
 
-	double rssi_aux_update_interval_msec; // If set to <=0 (default value), the auxialiary RouterOS-based device RSSI retrieval will be disabled
+	// Disabled as the RSSI information is sent by the other device, and not directly retrieved by us
+	// double rssi_aux_update_interval_msec; // If set to <=0 (default value), the auxialiary RouterOS-based device RSSI retrieval will be disabled
 
 	options_string auxiliary_device_ip_addr;
 

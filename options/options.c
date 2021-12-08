@@ -17,7 +17,7 @@
 #define LONGOPT_i "interface"
 #define LONGOPT_p "port"
 #define LONGOPT_A "central-zone"
-#define LONGOPT_R "rssi-aux-retrieval-periodicity"
+//#define LONGOPT_R "rssi-aux-retrieval-periodicity"
 #define LONGOPT_E "enable-enhanced-CAMs"
 
 // Long-only options
@@ -44,7 +44,7 @@ static const struct option long_opts[]={
 	{LONGOPT_L,				required_argument,	NULL, 'L'},
 	{LONGOPT_A,				required_argument,	NULL, 'A'},
 	{LONGOPT_g,				no_argument,		NULL, 'g'},
-	{LONGOPT_R,				required_argument,	NULL, 'R'},
+//	{LONGOPT_R,				required_argument,	NULL, 'R'},
 	{LONGOPT_E,				no_argument,		NULL, 'E'},
 
 	{LONGOPT_vehviz_update_interval_sec,	required_argument,	NULL, LONGOPT_vehviz_update_interval_sec_val},
@@ -95,10 +95,10 @@ static const struct option long_opts[]={
 	"  -i: set the interface name from which messages should be received.\n" \
 	"\t  Default: ("DEFAULT_IFACE").\n"
 
-#define OPT_R_description \
-	LONGOPT_STR_CONSTRUCTOR(LONGOPT_R) \
-	"  -R <periodicity in ms>: set the refresh periodicity for the auxiliary device RSSI retrieval.\n" \
-	"\t  Setting this to any value <=0 will disable the functionality. Default: -1 (disabled).\n"
+// #define OPT_R_description \
+// 	LONGOPT_STR_CONSTRUCTOR(LONGOPT_R) \
+// 	"  -R <periodicity in ms>: set the refresh periodicity for the auxiliary device RSSI retrieval.\n" \
+// 	"\t  Setting this to any value <=0 will disable the functionality. Default: -1 (disabled).\n"
 
 #define OPT_p_description \
 	LONGOPT_STR_CONSTRUCTOR(LONGOPT_p) \
@@ -112,8 +112,7 @@ static const struct option long_opts[]={
 
 #define OPT_aux_dev_addr_description \
 	"  --"LONGOPT_aux_dev_addr" <IP address>: set the IP address of a connected auxiliary device for communication.\n" \
-	"\t  This device should run RouterOS, and this option has an effect only if --"LONGOPT_R"/-R\n" \
-	"\t  has been specifiedwith a value greater than 0. Default: ("DEFAULT_AUX_IP"). Important: for the time being,\n" \
+	"\t  This device should run RouterOS. Default: ("DEFAULT_AUX_IP"). Important: for the time being,\n" \
 	"\t  the device should have a user with name 'admin' and no password.\n"
 
 #define OPT_E_description \
@@ -138,7 +137,7 @@ static void print_long_info(char *argv0) {
 		OPT_w_description
 		OPT_L_description
 		OPT_g_description
-		OPT_R_description
+		// OPT_R_description
 		OPT_E_description
 		OPT_vehviz_update_interval_sec_description
 		OPT_aux_dev_addr_description
@@ -181,7 +180,7 @@ void options_initialize(struct options *options) {
 
 	options->ageCheck_enabled=true;
 
-	options->rssi_aux_update_interval_msec=-1; // Disabled by default
+//	options->rssi_aux_update_interval_msec=-1; // Disabled by default
 
 	options->auxiliary_device_ip_addr=options_string_declare();
 
@@ -266,18 +265,18 @@ unsigned int parse_options(int argc, char **argv, struct options *options) {
 				}
 				break;
 
-			case 'R':
-				errno=0; // Setting errno to 0 as suggested in the strtod() man page
-				options->rssi_aux_update_interval_msec=strtod(optarg,&sPtr);
+			// case 'R':
+			// 	errno=0; // Setting errno to 0 as suggested in the strtod() man page
+			// 	options->rssi_aux_update_interval_msec=strtod(optarg,&sPtr);
 
-				if(sPtr==optarg) {
-					fprintf(stderr,"Cannot find any digit in the specified value (-R/--" LONGOPT_R ").\n");
-					print_short_info_err(options,argv[0]);
-				} else if(errno || options->rssi_aux_update_interval_msec>10000.0) {
-					fprintf(stderr,"Error in parsing the refresh rate for the auxiliary device RSSI retrieval. Remember that it must be smaller than 10 seconds (10000 ms).\n");
-					print_short_info_err(options,argv[0]);
-				}
-				break;
+			// 	if(sPtr==optarg) {
+			// 		fprintf(stderr,"Cannot find any digit in the specified value (-R/--" LONGOPT_R ").\n");
+			// 		print_short_info_err(options,argv[0]);
+			// 	} else if(errno || options->rssi_aux_update_interval_msec>10000.0) {
+			// 		fprintf(stderr,"Error in parsing the refresh rate for the auxiliary device RSSI retrieval. Remember that it must be smaller than 10 seconds (10000 ms).\n");
+			// 		print_short_info_err(options,argv[0]);
+			// 	}
+			// 	break;
 
 			case 'p':
 				errno=0; // Setting errno to 0 as suggested in the strtol() man page
