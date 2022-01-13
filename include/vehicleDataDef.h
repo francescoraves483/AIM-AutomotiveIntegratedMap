@@ -12,7 +12,8 @@
 
 // Unavailable value for the RSSI
 #define RSSI_UNAVAILABLE -80000
-#define CPULOAD_UNAVAILABLE 101
+#define CPULOAD_UNAVAILABLE 10001
+#define GPULOAD_UNAVAILABLE 10001
 #define RAMLOAD_UNAVAILABLE 512001
 
 namespace ldmmap {
@@ -71,6 +72,12 @@ namespace ldmmap {
 		double rssi_auxiliary_dBm;
 		double cpu_load_perc;
 		double ram_load_MB;
+		double gpu_load_perc;
+		double extradev_cpu_load_perc;
+		double extradev_ram_load_MB;
+		double extradev_gpu_load_perc;
+		std::string ipaddr;
+		std::string publicipaddr;
 
 		// Low frequency container data
 		OptionalDataItem<uint8_t> exteriorLights; // Bit string with exterior lights status

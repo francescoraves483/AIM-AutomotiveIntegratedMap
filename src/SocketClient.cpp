@@ -388,10 +388,73 @@ SocketClient::manageMessage(uint8_t *message_bin_buf,size_t bufsize) {
 					RAMLOAD_UNAVAILABLE :
 					static_cast<double>(decoded_encam->cam.camParameters.channelNodeStatusContainer->ramLoad);
 
+				vehdata.gpu_load_perc = 
+					decoded_encam->cam.camParameters.channelNodeStatusContainer->gpuLoad==GPULoad_unavailable ?
+					GPULOAD_UNAVAILABLE :
+					decoded_encam->cam.camParameters.channelNodeStatusContainer->gpuLoad/100.0;
+
+				vehdata.extradev_cpu_load_perc = 
+					decoded_encam->cam.camParameters.channelNodeStatusContainer->extraComputationDeviceCpuLoad==nullptr ||
+						*decoded_encam->cam.camParameters.channelNodeStatusContainer->extraComputationDeviceCpuLoad==CPULoad_unavailable ?
+					CPULOAD_UNAVAILABLE :
+					*decoded_encam->cam.camParameters.channelNodeStatusContainer->extraComputationDeviceCpuLoad/100.0;
+
+				vehdata.extradev_ram_load_MB = 
+					decoded_encam->cam.camParameters.channelNodeStatusContainer->extraComputationDeviceRamLoad==nullptr ||
+						*decoded_encam->cam.camParameters.channelNodeStatusContainer->extraComputationDeviceRamLoad==RAMLoad_unavailable ?
+					RAMLOAD_UNAVAILABLE :
+					static_cast<double>(*decoded_encam->cam.camParameters.channelNodeStatusContainer->extraComputationDeviceRamLoad);
+
+				vehdata.extradev_gpu_load_perc = 
+					decoded_encam->cam.camParameters.channelNodeStatusContainer->extraComputationDeciceGpuLoad==nullptr ||
+						*decoded_encam->cam.camParameters.channelNodeStatusContainer->extraComputationDeciceGpuLoad==GPULoad_unavailable ?
+					GPULOAD_UNAVAILABLE :
+					*decoded_encam->cam.camParameters.channelNodeStatusContainer->extraComputationDeciceGpuLoad/100.0;
+
 				vehdata.rssi_auxiliary_dBm = 
 					decoded_encam->cam.camParameters.channelNodeStatusContainer->auxilliaryLinkRSSI==nullptr ?
 					RSSI_UNAVAILABLE :
 					*(decoded_encam->cam.camParameters.channelNodeStatusContainer->auxilliaryLinkRSSI)/100.0;
+
+				// (Optional) IP address retrieval
+				if(decoded_encam->cam.camParameters.channelNodeStatusContainer->ipAddress!=nullptr) {
+					// If the size is different than 4, this is not an IP address, so it should not be processed
+					if(decoded_encam->cam.camParameters.channelNodeStatusContainer->ipAddress->size==4) {
+						char c_str_ipaddr[16]; // 12 characters + 3 "." + "\0"
+
+						std::snprintf(c_str_ipaddr,16,"%d.%d.%d.%d",
+							decoded_encam->cam.camParameters.channelNodeStatusContainer->ipAddress->buf[0],
+							decoded_encam->cam.camParameters.channelNodeStatusContainer->ipAddress->buf[1],
+							decoded_encam->cam.camParameters.channelNodeStatusContainer->ipAddress->buf[2],
+							decoded_encam->cam.camParameters.channelNodeStatusContainer->ipAddress->buf[3]);
+
+						vehdata.ipaddr=std::string(c_str_ipaddr);
+					} else {
+						vehdata.ipaddr="unavailable";
+					}
+				} else {
+					vehdata.ipaddr="unavailable";
+				}
+
+				// (Optional) Public IP address retrieval
+				if(decoded_encam->cam.camParameters.channelNodeStatusContainer->publicIpAddress!=nullptr) {
+					// If the size is different than 4, this is not an IP address, so it should not be processed
+					if(decoded_encam->cam.camParameters.channelNodeStatusContainer->publicIpAddress->size==4) {
+						char c_str_publicipaddr[16]; // 12 characters + 3 "." + "\0"
+
+						std::snprintf(c_str_publicipaddr,16,"%d.%d.%d.%d",
+							decoded_encam->cam.camParameters.channelNodeStatusContainer->ipAddress->buf[0],
+							decoded_encam->cam.camParameters.channelNodeStatusContainer->ipAddress->buf[1],
+							decoded_encam->cam.camParameters.channelNodeStatusContainer->ipAddress->buf[2],
+							decoded_encam->cam.camParameters.channelNodeStatusContainer->ipAddress->buf[3]);
+
+						vehdata.publicipaddr=std::string(c_str_publicipaddr);
+					} else {
+						vehdata.publicipaddr="unavailable";
+					}
+				} else {
+					vehdata.publicipaddr="unavailable";
+				}
 
 				if(decoded_encam->cam.camParameters.channelNodeStatusContainer->auxilliaryLinkMac!=nullptr) {
 					// If the size is different than 6, this is not a MAC address, so it should not be processed
