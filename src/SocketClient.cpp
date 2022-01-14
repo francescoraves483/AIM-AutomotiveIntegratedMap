@@ -443,10 +443,10 @@ SocketClient::manageMessage(uint8_t *message_bin_buf,size_t bufsize) {
 						char c_str_publicipaddr[16]; // 12 characters + 3 "." + "\0"
 
 						std::snprintf(c_str_publicipaddr,16,"%d.%d.%d.%d",
-							decoded_encam->cam.camParameters.channelNodeStatusContainer->ipAddress->buf[0],
-							decoded_encam->cam.camParameters.channelNodeStatusContainer->ipAddress->buf[1],
-							decoded_encam->cam.camParameters.channelNodeStatusContainer->ipAddress->buf[2],
-							decoded_encam->cam.camParameters.channelNodeStatusContainer->ipAddress->buf[3]);
+							decoded_encam->cam.camParameters.channelNodeStatusContainer->publicIpAddress->buf[0],
+							decoded_encam->cam.camParameters.channelNodeStatusContainer->publicIpAddress->buf[1],
+							decoded_encam->cam.camParameters.channelNodeStatusContainer->publicIpAddress->buf[2],
+							decoded_encam->cam.camParameters.channelNodeStatusContainer->publicIpAddress->buf[3]);
 
 						vehdata.publicipaddr=std::string(c_str_publicipaddr);
 					} else {
@@ -620,7 +620,9 @@ SocketClient::manageMessage(uint8_t *message_bin_buf,size_t bufsize) {
 			logfprintf(m_logfile_file,std::string("FULL CAM PROCESSING (Client ") + m_client_id + std::string(")"),"StationID=%u Coordinates=%.7lf:%.7lf Heading=%.1lf InstUpdatePeriod=%.3lf"
 				" CAMTimestamp=%ld GNTimestamp=%lu CAMTimestampDiff=%ld GNTimestampDiff=%ld"
 				" ProcTimeMilliseconds=%.6lf EnhancedCAMsEnabled=%d CPULoadPerc=%.2lf FreeRAMMB=%.2lf MAC_Addr=%02X:%02X:%02X:%02X:%02X:%02X"
-				" Aux_MAC_Addr=%s RSSI=%.2lf Aux_RSSI=%.2lf\n",
+				" Aux_MAC_Addr=%s RSSI=%.2lf Aux_RSSI=%.2lf"
+				" ExtraDev_CPU=%.2lf ExtraDev_freeRAMMB=%.2lf ExtraDev_freeGPU=%.2lf"
+				" IPAddress=%s PublicIPAddress=%s\n",
 				stationID,lat,lon,
 				vehdata.heading,
 				l_inst_period,
@@ -632,7 +634,12 @@ SocketClient::manageMessage(uint8_t *message_bin_buf,size_t bufsize) {
 				vehdata.macaddr[0],vehdata.macaddr[1],vehdata.macaddr[2],vehdata.macaddr[3],vehdata.macaddr[4],vehdata.macaddr[5],
 				vehdata.auxiliary_macaddr.c_str(),
 				vehdata.rssi_dBm,
-				vehdata.rssi_auxiliary_dBm);
+				vehdata.rssi_auxiliary_dBm,
+				vehdata.extradev_cpu_load_perc,
+				vehdata.extradev_ram_load_MB,
+				vehdata.extradev_gpu_load_perc,
+				vehdata.ipaddr.c_str(),
+				vehdata.publicipaddr.c_str());
 			
 			// fprintf(m_logfile_file,"[LOG - FULL CAM PROCESSING] StationID=%u Coordinates=%.7lf:%.7lf InstUpdatePeriod=%.3lf"
 			// 	" CAMTimestamp=%ld GNTimestamp=%lu CAMTimestampDiff=%ld GNTimestampDiff=%ld"
