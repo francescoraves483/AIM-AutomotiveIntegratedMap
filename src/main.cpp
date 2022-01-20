@@ -8,6 +8,7 @@
 #include "vehicle-visualizer.h"
 #include "SocketClient.h"
 #include "utils.h"
+#include "JSONserver.h"
 
 // Linux net includes
 #include <sys/ioctl.h>
@@ -252,12 +253,21 @@ int main(int argc, char **argv) {
 			SocketClient mainRecvClient(raw_sockfd,&aim_opts, db_ptr, logfile_name);
 
 			// Set the "self" MAC address, so that all the messages coming from this address will be discarded
-			mainRecvClient.setSelfMAC(dissem_vif_mac);
+			//mainRecvClient.setSelfMAC(dissem_vif_mac); [TBR]
+
+			// Before starting the data reception, create a new JSONserver object for client to retrieve the DB data
+			JSONserver jsonsrv(db_ptr,aim_opts.enable_enhanced_CAMs);
+			if(jsonsrv.startServer()!=true) {
+				fprintf(stderr,"Critical error: cannot start the JSON server for the client data retrieval.\n");
+				exit(EXIT_FAILURE);
+			}
 
 			fprintf(stdout,"Reception is going to start very soon...\n");
 
 			// Start the reception of V2X messages
 			mainRecvClient.startReception();
+
+			jsonsrv.stopServer();
 		}
 	}
 

@@ -5,3 +5,4 @@
 -Ioptions
 -Idecoder-module/asn1/include
 -Idecoder-module/include
+-Ijson11
