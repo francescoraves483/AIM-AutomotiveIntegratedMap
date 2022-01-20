@@ -1,4 +1,5 @@
 #include <sys/socket.h>
+#include <sys/select.h>
 #include <netinet/in.h>
 #include <pthread.h>
 #include <unistd.h>
@@ -112,7 +113,7 @@ void *JSONthread_callback(void *arg) {
 						++currd_it;
 					} else {
 						perror("[ERROR] Cannot read a data request from a client. Reason");
-						
+
 						++currd_it;
 					}
 				}
