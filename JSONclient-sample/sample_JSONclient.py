@@ -26,7 +26,10 @@ def main():
 		tcp_sock.sendall(bytes(json.dumps(request),encoding="utf-8"))
 		
 		# Recive and parse reply
-		rx_data_str=tcp_sock.recv(1024).decode("utf-8")
+		rx_data_str=tcp_sock.recv(4096).decode("utf-8")
+		
+		print(rx_data_str);
+		
 		rx_data=json.loads(rx_data_str)
 		
 		print("Received JSON file:")
