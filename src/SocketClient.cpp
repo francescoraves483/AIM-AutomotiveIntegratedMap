@@ -621,7 +621,7 @@ SocketClient::manageMessage(uint8_t *message_bin_buf,size_t bufsize) {
 				" CAMTimestamp=%ld GNTimestamp=%lu CAMTimestampDiff=%ld GNTimestampDiff=%ld"
 				" ProcTimeMilliseconds=%.6lf EnhancedCAMsEnabled=%d CPULoadPerc=%.2lf FreeRAMMB=%.2lf MAC_Addr=%02X:%02X:%02X:%02X:%02X:%02X"
 				" Aux_MAC_Addr=%s RSSI=%.2lf Aux_RSSI=%.2lf"
-				" ExtraDev_CPU=%.2lf ExtraDev_freeRAMMB=%.2lf ExtraDev_freeGPU=%.2lf"
+				" ExtraDev_CPU=%.2lf ExtraDev_freeRAMMB=%.2lf ExtraDev_GPU=%.2lf"
 				" IPAddress=%s PublicIPAddress=%s\n",
 				stationID,lat,lon,
 				vehdata.heading,

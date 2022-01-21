@@ -253,7 +253,7 @@ int main(int argc, char **argv) {
 			SocketClient mainRecvClient(raw_sockfd,&aim_opts, db_ptr, logfile_name);
 
 			// Set the "self" MAC address, so that all the messages coming from this address will be discarded
-			//mainRecvClient.setSelfMAC(dissem_vif_mac); [TBR]
+			mainRecvClient.setSelfMAC(dissem_vif_mac);
 
 			// Before starting the data reception, create a new JSONserver object for client to retrieve the DB data
 			JSONserver jsonsrv(db_ptr,aim_opts.enable_enhanced_CAMs);
