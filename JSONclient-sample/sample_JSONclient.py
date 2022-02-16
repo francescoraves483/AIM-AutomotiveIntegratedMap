@@ -23,7 +23,7 @@ def main():
 	if(welcome_msg.decode("utf-8")=="Connection: confirmed"):
 		request={"lat": float(args.latitude), "lon": float(args.longitude)}
 		
-		tcp_sock.sendall(bytes(json.dumps(request),encoding="utf-8"))
+		tcp_sock.sendall(bytes(json.dumps(request)+"\0",encoding="utf-8"))
 		
 		# Recive and parse reply
 		rx_data_str=tcp_sock.recv(4096).decode("utf-8")
