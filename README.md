@@ -5,7 +5,7 @@ This is the main repository for AIM, the **Automotive Integrated Map**, an enric
 AIM is a V-LDM implementation which is able to store pre-processed information about nearby vehicles in a Vehicular Networking context, thanks to the reception of periodic standard compliant **version 2 Cooperative Awareness Messages (CAMs)**, as defined by [ETSI EN 302 637-2 V1.4.1](https://www.etsi.org/deliver/etsi_en/302600_302699/30263702/01.04.01_60/en_30263702v010401p.pdf). Compatibility with CAMs version 1 is not guaranteed.
 
 AIM is able to work not only with standard-compliant CAMs, but also with a proposed kind of [Enhanced CAMs](https://github.com/francescoraves483/EnhancedCAMs-asn1), carrying additional information about nearby vehicles, such as their node load (in terms of CPU, RAM, GPU), channel RSSI, MAC and service IP addresses.
-The ability to receive and decode Enhanced CAMs must be manually enabled through the `--enable-enhanced-CAMs` (in short, `-E`) option. This option **should not be specified** when using AIM in a fully standard-compliant scenario with normal version 2 CAMs only. Currently, Enhanced CAMs can be received from a properly configure instance of [the Open CA Basic Service (OCABS)](https://github.com/francescoraves483/OCABS-project). When using Enhanced CAMs, AIM will also store the additional node and channel load information about nearby vehicles.
+The ability to receive and decode Enhanced CAMs must be manually enabled through the `--enable-enhanced-CAMs` (in short, `-E`) option. This option **should not be specified** when using AIM in a fully standard-compliant scenario with normal version 2 CAMs only. Currently, Enhanced CAMs can be received from a properly configured instance of [the Open CA Basic Service (OCABS)](https://github.com/francescoraves483/OCABS-project). When using Enhanced CAMs, AIM will also store the additional node and channel load information about nearby vehicles.
 
 If standard CAMs are used and `--enable-enhanced-CAMs` is not specified, AIM can be fully used without any limitation, and it will just not store the additional node and channel load information, being limited to the dynamic data available inside standard CAMs (i.e., to the same set of data which can be store inside the [S-LDM](https://github.com/francescoraves483/S-LDM)).
 
@@ -156,3 +156,10 @@ When running as a service, the output of AIM is not directly available, but it c
 ```
 logread
 ```
+
+
+# Contact and License information
+
+This project is licensed under a GPL-3.0 License. Please see also the `LICENSE` file for more details.
+
+For any question, please write to _francescorav.es483@gmail.com_. Thanks!
