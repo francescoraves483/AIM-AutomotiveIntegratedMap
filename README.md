@@ -163,3 +163,8 @@ logread
 This project is licensed under a GPL-2.0 License. Please see also the `LICENSE` file for more details.
 
 For any question, please write to _francescorav.es483@gmail.com_. Thanks!
+
+
+# Used libraries
+
+This project includes the **json11** C++ library by Dropbox: [github.com/dropbox/json11](https://github.com/dropbox/json11).
