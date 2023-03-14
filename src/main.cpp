@@ -10,6 +10,10 @@
 #include "utils.h"
 #include "JSONserver.h"
 
+#if GPSD_ENABLED
+#include "simple_gpsc.h"
+#endif
+
 // Linux net includes
 #include <sys/ioctl.h>
 #include <net/if.h>
@@ -205,6 +209,11 @@ int main(int argc, char **argv) {
 		logfile_name=std::string(options_string_pop(aim_opts.logfile_name));
 	}
 
+	#if GPSD_ENABLED
+	// Create GPSClient (connecting to gpsd, then, only if -P is specified)
+	GPSClient gpsc("localhost",aim_opts.position_printing_gnss_port);
+	#endif
+
 	// Open a socket for the reception of raw (BTP + GeoNetworking) messages
 	int raw_sockfd=-1;
 	// sockfd=socket(AF_INET,SOCK_DGRAM,IPPROTO_UDP); // Old UDP socket, no more used
@@ -212,7 +221,7 @@ int main(int argc, char **argv) {
 
 	if(raw_sockfd<0) {
 		fprintf(stderr,"Critical error: cannot open raw socket for message reception (expecting CAMs over BTP and GeoNetworking).\n");
-		terminatorFlag = true;
+		terminatorFlag=true;
 	} else {
 		fprintf(stdout,"Socket opened. Descriptor: %d\n",raw_sockfd);
 
@@ -224,7 +233,7 @@ int main(int argc, char **argv) {
 			memcpy(dissem_vif_mac,ifreq.ifr_hwaddr.sa_data,6);
 		} else {
 			std::cerr << "Critical error: cannot find a MAC address for interface: " << options_string_pop(aim_opts.udp_interface) << std::endl;
-			exit(EXIT_FAILURE);
+			terminatorFlag=true;
 		}
 
 		if(terminatorFlag==false) {
@@ -246,11 +255,31 @@ int main(int argc, char **argv) {
 			errno=0;
 			if(bind(raw_sockfd,(struct sockaddr *) &bindSockAddr,sizeof(bindSockAddr))<0) {
 				fprintf(stderr,"Critical error: cannot bind the raw socket for the reception of V2X messages. Error: %s\n",strerror(errno));
-				exit(EXIT_FAILURE);
+				terminatorFlag=true;
+				goto exit_failure;
 			}
 
 			// Create the main SocketClient object for the reception of the V2X messages
 			SocketClient mainRecvClient(raw_sockfd,&aim_opts, db_ptr, logfile_name);
+
+			if(aim_opts.denm_printing_enabled==true) {
+				mainRecvClient.enableDENMdecoding();
+			}
+
+			#if GPSD_ENABLED
+			if(aim_opts.denm_printing_enabled==true && aim_opts.position_printing_enabled==true) {
+				try {
+					gpsc.openConnection(); // Start the gps client connection to gpsd
+				} catch(const std::exception& e) {
+					std::cerr << "Error in creating a new GPS Client connection: " << e.what() << std::endl;
+					terminatorFlag=true;
+					goto exit_failure;
+				}
+
+				fprintf(stdout,"[INFO] gpsd connection established on port %ld.\n",aim_opts.position_printing_gnss_port);
+				mainRecvClient.setGPSClient(&gpsc);
+			}
+			#endif
 
 			// Set the "self" MAC address, so that all the messages coming from this address will be discarded
 			mainRecvClient.setSelfMAC(dissem_vif_mac);
@@ -259,7 +288,8 @@ int main(int argc, char **argv) {
 			JSONserver jsonsrv(db_ptr,aim_opts.enable_enhanced_CAMs);
 			if(jsonsrv.startServer()!=true) {
 				fprintf(stderr,"Critical error: cannot start the JSON server for the client data retrieval.\n");
-				exit(EXIT_FAILURE);
+				terminatorFlag=true;
+				goto exit_failure;
 			}
 
 			fprintf(stdout,"Reception is going to start very soon...\n");
@@ -271,16 +301,27 @@ int main(int argc, char **argv) {
 		}
 	}
 
+	exit_failure:
+
 	pthread_join(dbcleaner_tid,nullptr);
 	pthread_join(vehviz_tid,nullptr);
 
 	// Close the socket
 	close(raw_sockfd);
 
+	#if GPSD_ENABLED
+	// Close the connection to gpsd if it was previously opened
+	if(aim_opts.denm_printing_enabled==true && aim_opts.position_printing_enabled==true) {
+		gpsc.closeConnection();
+	}
+	#endif
+
 	db_ptr->clear();
 
 	// Freeing the options
 	options_free(&aim_opts);
+
+	fprintf(stdout,"Terminated.\n");
 
 	return 0;
 }

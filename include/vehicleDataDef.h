@@ -8,7 +8,7 @@
 #define vehicleDataVector_t(name) std::vector<ldmmap::vehicleData_t> name;
 
 // Facility macro to convert from DEG to RAD
-#define DEG_2_RAD(val) ((val)*M_PI/180.0)
+#define DEG_2_RAD_AIM(val) ((val)*M_PI/180.0)
 
 // Unavailable value for the RSSI
 #define RSSI_UNAVAILABLE -80000

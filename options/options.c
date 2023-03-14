@@ -19,6 +19,10 @@
 #define LONGOPT_A "central-zone"
 //#define LONGOPT_R "rssi-aux-retrieval-periodicity"
 #define LONGOPT_E "enable-enhanced-CAMs"
+#define LONGOPT_D "print-denms"
+#if GPSD_ENABLED
+#define LONGOPT_P "print-gnss-position"
+#endif
 
 // Long-only options
 #define LONGOPT_vehviz_update_interval_sec "vehviz-update-interval"
@@ -46,6 +50,10 @@ static const struct option long_opts[]={
 	{LONGOPT_g,				no_argument,		NULL, 'g'},
 //	{LONGOPT_R,				required_argument,	NULL, 'R'},
 	{LONGOPT_E,				no_argument,		NULL, 'E'},
+	{LONGOPT_D,				no_argument,		NULL, 'D'},
+	#if GPSD_ENABLED
+	{LONGOPT_P,				required_argument,	NULL, 'P'},
+	#endif
 
 	{LONGOPT_vehviz_update_interval_sec,	required_argument,	NULL, LONGOPT_vehviz_update_interval_sec_val},
 	{LONGOPT_aux_dev_addr,					required_argument,	NULL, LONGOPT_aux_dev_addr_val},
@@ -95,10 +103,19 @@ static const struct option long_opts[]={
 	"  -i: set the interface name from which messages should be received.\n" \
 	"\t  Default: ("DEFAULT_IFACE").\n"
 
-// #define OPT_R_description \
-// 	LONGOPT_STR_CONSTRUCTOR(LONGOPT_R) \
-// 	"  -R <periodicity in ms>: set the refresh periodicity for the auxiliary device RSSI retrieval.\n" \
-// 	"\t  Setting this to any value <=0 will disable the functionality. Default: -1 (disabled).\n"
+#define OPT_D_description \
+	LONGOPT_STR_CONSTRUCTOR(LONGOPT_D) \
+	"  -D: enable reception of DENMs. Received DENMs, for the time being, are only used to log\n" \
+	"\t  some basic information for each message, and not yet to update the internal database.\n" \
+	"\t  DENM reception is not enabled by default.\n"
+
+#if GPSD_ENABLED
+#define OPT_P_description \
+	LONGOPT_STR_CONSTRUCTOR(LONGOPT_P) \
+	"  -P <gpsd_port>: enable position logging. This option works only if the DENM reception is enabled,\n" \
+	"\t  for the time being. Specifying this option will make AIM log the position of the vehicle\n" \
+	"\t  for each received DENM. Specifying 0 as port number, will make AIM use the default port "STRINGIFY(GPSD_DEFAULT_PORT)".\n"
+#endif
 
 #define OPT_p_description \
 	LONGOPT_STR_CONSTRUCTOR(LONGOPT_p) \
@@ -110,11 +127,6 @@ static const struct option long_opts[]={
 	"  -A: set a central latitude and longitude around which the Vehicle Visualizer map will be drawn.\n" \
 	"\t  This option is thought solely for visualization purposes. Default: ("STRINGIFY(DEFAULT_CENTRAL_LAT)"-"STRINGIFY(DEFAULT_CENTRAL_LON)").\n"
 
-#define OPT_aux_dev_addr_description \
-	"  --"LONGOPT_aux_dev_addr" <IP address>: set the IP address of a connected auxiliary device for communication.\n" \
-	"\t  This device should run RouterOS. Default: ("DEFAULT_AUX_IP"). Important: for the time being,\n" \
-	"\t  the device should have a user with name 'admin' and no password.\n"
-
 #define OPT_E_description \
 	LONGOPT_STR_CONSTRUCTOR(LONGOPT_E) \
 	"  -E: enable decoding of experimental enhanced CAMs containing an additional container with computational load and\n" \
@@ -124,7 +136,7 @@ static const struct option long_opts[]={
 	"\t  not specify this option. Default: (not specified).\n"
 
 static void print_long_info(char *argv0) {
-	fprintf(stdout,"\nUsage: %s [-A S-LDM coverage internal area] [options]\n"
+	fprintf(stdout,"\nUsage: %s [options]\n"
 		"%s [-h | --"LONGOPT_h"]: print help and show options\n"
 		"%s [-v | --"LONGOPT_v"]: print version information\n\n"
 
@@ -139,8 +151,11 @@ static void print_long_info(char *argv0) {
 		OPT_g_description
 		// OPT_R_description
 		OPT_E_description
+		OPT_D_description
+		#if GPSD_ENABLED
+		OPT_P_description
+		#endif
 		OPT_vehviz_update_interval_sec_description
-		OPT_aux_dev_addr_description
  		,
 		argv0,argv0,argv0);
 
@@ -150,7 +165,7 @@ static void print_long_info(char *argv0) {
 static void print_short_info_err(struct options *options,char *argv0) {
 	options_free(options);
 
-	fprintf(stdout,"\nUsage: %s [-A S-LDM coverage internal area] [options]\n"
+	fprintf(stdout,"\nUsage: %s [options]\n"
 		"%s [-h | --"LONGOPT_h"]: print help and show options\n"
 		"%s [-v | --"LONGOPT_v"]: print version information\n\n"
 		,
@@ -185,6 +200,13 @@ void options_initialize(struct options *options) {
 	options->auxiliary_device_ip_addr=options_string_declare();
 
 	options->enable_enhanced_CAMs=false;
+
+	options->denm_printing_enabled=false;
+
+	#if GPSD_ENABLED
+	options->position_printing_enabled=false;
+	options->position_printing_gnss_port=GPSD_DEFAULT_PORT;
+	#endif
 }
 
 unsigned int parse_options(int argc, char **argv, struct options *options) {
@@ -310,6 +332,43 @@ unsigned int parse_options(int argc, char **argv, struct options *options) {
 				options->enable_enhanced_CAMs=true;
 				break;
 
+			case 'D':
+				if(options->denm_printing_enabled==true) {
+					fprintf(stderr,"Error. The DENM printing feature (-D/--"LONGOPT_D") has already been enabled once.\n");
+					print_short_info_err(options,argv[0]);
+				}
+
+				options->denm_printing_enabled=true;
+				break;
+
+			#if GPSD_ENABLED
+			case 'P':
+				if(options->position_printing_enabled==true) {
+					fprintf(stderr,"Error. The position printing feature (-P/--"LONGOPT_P") has already been enabled once.\n");
+					print_short_info_err(options,argv[0]);
+				}
+
+				options->position_printing_enabled=true;
+
+				// Parse the port
+				errno=0; // Setting errno to 0 as suggested in the strtol() man page
+				options->position_printing_gnss_port=strtol(optarg,&sPtr,10);
+
+				if(sPtr==optarg) {
+					fprintf(stderr,"Cannot find any digit in the specified value (-P/" LONGOPT_P ").\n");
+					print_short_info_err(options,argv[0]);
+				} else if(errno || options->position_printing_gnss_port<0 || options->position_printing_gnss_port>65535) {
+					// Only port numbers from 1 to 65535 are valid and can be accepted ('0' will make, instead, AIM use the default port GPSD_DEFAULT_PORT)
+					fprintf(stderr,"Error in parsing the port number for connecting to gpsd.\n");
+					print_short_info_err(options,argv[0]);
+				}
+
+				if(options->position_printing_gnss_port==0) {
+					options->position_printing_gnss_port=GPSD_DEFAULT_PORT;
+				}
+				break;
+			#endif
+
 			case LONGOPT_vehviz_update_interval_sec_val:
 				errno=0; // Setting errno to 0 as suggested in the strtod() man page
 				options->vehviz_update_interval_sec=strtod(optarg,&sPtr);
@@ -363,14 +422,6 @@ unsigned int parse_options(int argc, char **argv, struct options *options) {
 	if(options_string_len(options->udp_interface)<=0) {
 		if(!options_string_push(&(options->udp_interface),DEFAULT_IFACE)) {
 			fprintf(stderr,"Error! Cannot set the default interface to receive the messages from.\nPlease report this bug to the developers.\n");
-			exit(EXIT_FAILURE);
-		}
-	}
-
-	if(options_string_len(options->auxiliary_device_ip_addr)<=0) {
-		if(!options_string_push(&(options->auxiliary_device_ip_addr),DEFAULT_AUX_IP)) {
-			fprintf(stderr,"Error! Cannot set the default auxiliary device IP address, i.e. %s.\nPlease report this bug to the developers.\n",
-				DEFAULT_AUX_IP);
 			exit(EXIT_FAILURE);
 		}
 	}

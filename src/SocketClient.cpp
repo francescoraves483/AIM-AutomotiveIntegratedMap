@@ -27,78 +27,7 @@
 		      } \
 		}
 
-// void
-// SocketClient::routerOS_RSSI_retriever(void) {
-// 	// Create a new timer
-// 	struct pollfd pollfddata;
-// 	int clockFd;
-
-// 	// Popen buffer
-// 	char popen_buff[2000];
-
-// 	if(timer_fd_create(pollfddata, clockFd, m_opts_ptr->rssi_aux_update_interval_msec*1e3)<0) {
-// 		std::cerr << "[ERROR] Fatal error! Cannot create timer for the routerOS RSSI retriever thread. No RSSI data will be available." << std::endl;
-// 		m_routeros_rssi={};
-// 		return;
-// 	}
-
-// 	POLL_DEFINE_JUNK_VARIABLE();
-
-// 	while(m_terminate_routeros_rssi_flag==false) {
-// 		if(poll(&pollfddata,1,0)>0) {
-// 			POLL_CLEAR_EVENT(clockFd);
-
-// 			// Original command via ssh: ssh admin@192.168.88.2 interface w60g monitor wlan60-1 once | grep -E "rssi|remote-address"
-// 			std::string ssh_command = "stdbuf -o L ssh admin@" + std::string(options_string_pop(m_opts_ptr->auxiliary_device_ip_addr)) + " interface w60g monitor wlan60-1 once | stdbuf -o L grep -E \"rssi|remote-address\"";
-// 			FILE *ssh = popen(ssh_command.c_str(),"r");
-
-// 			if(ssh==NULL) {
-// 				// Sleep at least 1 second, and then try again after a timer expiration
-// 				sleep(1);
-// 				continue;
-// 			}
-
-// 			std::vector<std::string> m_remotes;
-
-// 			while(fgets(popen_buff,2000,ssh)!=NULL) {
-// 				char* pch;
-// 				if(strstr(popen_buff,"remote-address")) {
-// 					m_remotes.clear();
-
-// 					pch=strtok(popen_buff,":");
-// 					pch=strtok(NULL," ,");
-
-// 					while(pch!=nullptr) {
-// 						std::string pchstr=std::string(pch);
-// 						pchstr.erase(std::remove_if(pchstr.begin(), pchstr.end(), isspace), pchstr.end());
-// 						m_remotes.push_back(pchstr);
-
-// 						pch=strtok(NULL, " ,");
-// 				  	}
-// 				} else if(strstr(popen_buff,"rssi")) {
-// 					pch = strtok (popen_buff,":");
-// 					pch = strtok (NULL," ,");
-
-// 					m_routeros_rssi_mutex.lock();
-// 					for(int i=0;i<m_remotes.size() && pch!=NULL;i++) {
-// 						m_routeros_rssi[m_remotes[i]]=strtod(pch,nullptr);
-// 						pch=strtok(NULL, " ,");
-// 					}
-// 					m_routeros_rssi_mutex.unlock();
-// 				}
-// 			}
-// 		}
-// 	}
-
-// 	close(clockFd);
-// }
-
 // If this is a full ITS message manage the low frequency container data
-// Check if this CAM contains the low frequency container
-// and if the ext. lights hack for older versions CAMs is disable
-// If yes, store the exterior lights status
-// If not, check if an older information about the exterior lights of the current vehicle already exist in the database (using m_db_ptr->lookup()),
-// if this data exists, use this data, if not, just set the exterior lights information as unavailable
 inline ldmmap::OptionalDataItem<uint8_t>
 SocketClient::manage_LowfreqContainer(void *decoded_cam_void,uint32_t stationID) {
 	if(m_opts_ptr->enable_enhanced_CAMs==true) {
@@ -236,7 +165,6 @@ SocketClient::stopReception(void) {
 void 
 SocketClient::manageMessage(uint8_t *message_bin_buf,size_t bufsize) {
 	etsiDecoder::etsiDecodedData_t decodedData;
-	char popen_iw_buff[POPEN_IW_BUFF_SIZE];
 
 	uint64_t bf = 0.0,af = 0.0;
 	uint64_t main_bf = 0.0,main_af = 0.0;
@@ -486,70 +414,7 @@ SocketClient::manageMessage(uint8_t *message_bin_buf,size_t bufsize) {
 
 		// Retrieve, if available, the information on the RSSI for the vehicle corresponding to the MAC address of the sender
 		// This is the RSSI on the CAM dissemination interface
-
-		// ioctl() does not seem to work for some drivers, which are instead using nl80211
-		// The following code is a "quick and dirty" way of getting the RSSI, leveraging popen and calling the iw tool
-		// This part should hopefully be converted to the usage of nl80211 in the near future
-		// struct iw_statistics wifistats;
-		// struct iwreq wifireq;
-		// strncpy(wifireq.ifr_name,options_string_pop(m_opts_ptr->udp_interface),IFNAMSIZ);
-		// wifireq.u.data.pointer=&wifistats;
-		// wifireq.u.data.length = sizeof(wifistats);
-
-		// if(ioctl(m_raw_rx_sock,SIOCGIWSTATS,&wifireq) == -1 || !(wifistats.qual.updated & IW_QUAL_DBM)) {
-		// 	vehdata.rssi_dBm=RSSI_UNAVAILABLE;
-		// } else {
-		// 	vehdata.rssi_dBm=wifistats.qual.level;
-		// }
-
-		std::string ssh_command = "stdbuf -o L iw dev " + std::string(options_string_pop(m_opts_ptr->udp_interface)) + " station dump | stdbuf -o L grep -E \"signal:|Station\" | tr -d '\t' | tr -s ' '";
-		FILE *ssh = popen(ssh_command.c_str(),"r");
-
-		vehdata.rssi_dBm=RSSI_UNAVAILABLE;
-		
-		while(ssh!=nullptr && fgets(popen_iw_buff,POPEN_IW_BUFF_SIZE,ssh)!=NULL) {
-			char* pch=nullptr;
-			pch=strtok(popen_iw_buff," ,");
-			if(strstr(pch,"Station")) {
-				char mac[18];
-				std::snprintf(mac,18,"%02X:%02X:%02X:%02X:%02X:%02X",
-					vehdata.macaddr[0],
-					vehdata.macaddr[1],
-					vehdata.macaddr[2],
-					vehdata.macaddr[3],
-					vehdata.macaddr[4],
-					vehdata.macaddr[5]);
-
-				pch=strtok(NULL," ,");
-				
-				if(std::string(pch)!=std::string(mac)) {
-					// Skip the RSSI/"signal:" line if the MAC is not the one of interest
-					pch=strtok(NULL," ,");
-				}
-			} else if(strstr(pch,"signal:")) {
-				pch=strtok(NULL," ,");
-
-				// This is the desired RSSI/"signal" value
-				vehdata.rssi_dBm=strtod(pch,nullptr);
-				
-				break;
-			}
-		}
-
-		// ----- This part has been disabled as the used mmWave devices are unable to establish point-to-point links, thus the RSSI information between the other devices and the AP shall be received via CAMs -----
-		// Retrieve, if available, the information on the RSSI for a connected auxiliary device, via ssh
-		// This information is retrieved only if specified by the user
-		// if(m_opts_ptr->rssi_aux_update_interval_msec>=0 && vehdata.auxiliary_macaddr!="unavailable") {
-		// 	m_routeros_rssi_mutex.lock();
-			
-		// 	if(m_routeros_rssi.count(vehdata.auxiliary_macaddr)>0) {
-		// 		vehdata.rssi_auxiliary_dBm=m_routeros_rssi[vehdata.auxiliary_macaddr];
-		// 	} else {
-		// 		vehdata.rssi_auxiliary_dBm=RSSI_UNAVAILABLE;
-		// 	}
-
-		// 	m_routeros_rssi_mutex.unlock();
-		// }
+		vehdata.rssi_dBm=get_rssi_from_iw(vehdata.macaddr,std::string(options_string_pop(m_opts_ptr->udp_interface)));
 
 		if(m_opts_ptr->enable_enhanced_CAMs==true) {
 			if(decoded_encam->cam.camParameters.highFrequencyContainer.choice.basicVehicleContainerHighFrequency.vehicleWidth != VehicleWidth_unavailable) {
@@ -649,9 +514,110 @@ SocketClient::manageMessage(uint8_t *message_bin_buf,size_t bufsize) {
 			// 	vehdata.camTimestamp,vehdata.gnTimestamp,get_timestamp_ms_cam()-vehdata.camTimestamp,get_timestamp_ms_gn()-vehdata.gnTimestamp,
 			// 	(main_af-main_bf)/1000000.0);	
 		}
+	} else if(denm_decoding_enabled==true && (decodedData.type == etsiDecoder::ETSI_DECODED_DENM || decodedData.type == etsiDecoder::ETSI_DECODED_DENM_NOGN)) {
+		// For DENMs, if reception is enabled, print just some basic information, for the time being
+		DENM_t *decoded_denm = (DENM_t *) decodedData.decoded_msg;
 
+		// Buffer for the MAC address of the sending vehicle or RSU (in general, of the sending ITS-S)
+		uint8_t sender_mac[6];
+
+		if(decoded_denm!=nullptr) {
+			// Get the stationID from the DENM
+			long stationID = decoded_denm->header.stationID;
+
+			// Get the event reference latitude
+			double reference_latitude = decoded_denm->denm.management.eventPosition.latitude/1e7;
+
+			// Get the event reference longitude
+			double reference_longitude = decoded_denm->denm.management.eventPosition.longitude/1e7;
+
+			// Get the GN timestamp
+			uint32_t gn_ts = decodedData.gnTimestamp;
+
+			// Get the MAC address of the sending ITS-S (the MAC address is stored in the last 6 Bytes of the GN Address)
+			memcpy(sender_mac,&(decodedData.GNaddress[0])+2,6);
+
+			// // Use the MAC address to get the signal level through iw
+			// // A return value of RSSI_UNAVAILABLE (-80000) means that no RSSI value could be retrieved at present time
+			double rssi = get_rssi_from_iw(sender_mac,std::string(options_string_pop(m_opts_ptr->udp_interface)));
+
+			if(m_logfile_name!="") {
+				fprintf(m_logfile_file,"[DENM] Current_timestamp=%" PRIu64 " StationID=%ld RSSI_dbm=%.1lf GN_ts=%" PRIu32 " Ref_lat=%.7lf Ref_lon=%-7lf Sender_MAC=%02X:%02X:%02X:%02X:%02X:%02X",
+					get_timestamp_us(),
+					stationID,
+					rssi,
+					gn_ts,
+					reference_latitude,
+					reference_longitude,
+					sender_mac[0],sender_mac[1],sender_mac[2],sender_mac[3],sender_mac[4],sender_mac[5]);
+				fflush(m_logfile_file);
+			} else {
+				printf("[DENM] Current_timestamp=%" PRIu64 " StationID=%ld RSSI_dbm=%.1lf GN_ts=%" PRIu32 " Ref_lat=%.7lf Ref_lon=%-7lf\n Sender_MAC=%02X:%02X:%02X:%02X:%02X:%02X",
+					get_timestamp_us(),
+					stationID,
+					rssi,
+					gn_ts,
+					reference_latitude,
+					reference_longitude,
+					sender_mac[0],sender_mac[1],sender_mac[2],sender_mac[3],sender_mac[4],sender_mac[5]);
+			}
+
+			#if GPSD_ENABLED
+			bool oob_error;
+			// Retrive the vehicle position (and heading/speed) if a proper GPS Client has been specified and AIM has been compiled to support connection to a gpsd daemon
+			if(m_gpsc_ptr!=nullptr) {
+				std::pair<double,double> latlon = m_gpsc_ptr->getCurrentPosition();
+				double speed = m_gpsc_ptr->getSpeedValue();
+				double heading = m_gpsc_ptr->getHeadingValue();
+				oob_error = false;
+
+				// Manage invalid values, setting -80000 as an "unavailable" value
+				if(latlon.first<-91) {
+					latlon.first=-80000;
+					oob_error=true;
+				}
+
+				if(latlon.second<-181) {
+					latlon.second=-80000;
+					oob_error=true;
+				}
+
+				if(heading<-361) {
+					heading=-80000;
+					oob_error=true;
+				}
+
+				if(speed<-500) {
+					speed=-80000;
+					oob_error=true;
+				}
+					
+				if(oob_error==true) {
+					fprintf(stderr,"[WARN] Out-of-bound positioning values detected!\n");
+				}
+
+				if(m_logfile_name!="") {
+					fprintf(m_logfile_file," Vehicle_lat=%.7lf Vehicle_lon=%.7lf Vehicle_speed=%.2lf Vehicle_heading=%.2lf",
+						latlon.first,latlon.second,speed,heading);
+					fflush(m_logfile_file);
+				} else {
+					printf(" Vehicle_lat=%.7lf Vehicle_lon=%.7lf Vehicle_speed=%.2lf Vehicle_heading=%.2lf",
+						latlon.first,latlon.second,speed,heading);
+				}
+			}
+			#endif
+
+			if(m_logfile_name!="") {
+				fprintf(m_logfile_file,"\n");
+				fflush(m_logfile_file);
+			} else {
+				printf("\n");
+			}
+
+			ASN_STRUCT_FREE(asn_DEF_DENM,decoded_denm);
+		}
 	} else {
-		std::cerr << "Warning! Only CAM messages are supported for the time being!" << std::endl;
+		std::cerr << "Warning! Only CAM messages (and, optionally, DENMs) are supported for the time being!" << std::endl;
 		return;
 	}
 }

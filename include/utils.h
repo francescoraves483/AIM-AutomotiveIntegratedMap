@@ -25,5 +25,6 @@ bool doublecomp(double d1, double d2, double eps = 0.0001);
 // As it is retrieving the time for each call to logfprintf() it is expected 
 // be slightly slower than fprintf and should thus be used only when really needed
 int logfprintf(FILE *stream,std::string modulename,const char *format,...);
+double get_rssi_from_iw(uint8_t macaddr[6],std::string interface_name);
 
 #endif // SLDM_UTILS_H

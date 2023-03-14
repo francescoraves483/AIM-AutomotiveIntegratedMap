@@ -6,3 +6,5 @@
 -Idecoder-module/asn1/include
 -Idecoder-module/include
 -Ijson11
+-Ignss
+-DGPSD_ENABLED

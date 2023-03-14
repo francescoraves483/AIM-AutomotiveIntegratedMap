@@ -12,10 +12,15 @@
 #include "LDMmap.h"
 #include "utils.h"
 
+#if GPSD_ENABLED
+#include "simple_gpsc.h"
+#endif
+
 extern "C" {
 	#include "options.h"
 	#include "CAM.h"
 	#include "CAMEnhanced.h"
+	#include "DENM.h"
 }
 
 // Maxium possible size of messages which could be received from the socket
@@ -23,10 +28,6 @@ extern "C" {
 
 // GeoNetworking Ethertype value
 #define GN_ETHERTYPE 0x8947
-
-// Size of the popen iw buffer, to read the RSSI given a MAC address
-// This is currently a bit oversized -> need to define a "more tight" size in the near future
-#define POPEN_IW_BUFF_SIZE 2000
 
 class SocketClient {
 	private:
@@ -62,6 +63,12 @@ class SocketClient {
 		bool m_self_mac_set;
 
 		// std::atomic<bool> m_terminate_routeros_rssi_flag;
+
+		bool denm_decoding_enabled;
+
+		#if GPSD_ENABLED
+		GPSClient *m_gpsc_ptr;
+		#endif
 	public:
 		SocketClient(const int &raw_rx_sock,struct options *opts_ptr, ldmmap::LDMMap *db_ptr, std::string logfile_name):
 			m_raw_rx_sock(raw_rx_sock), m_opts_ptr(opts_ptr), m_db_ptr(db_ptr), m_logfile_name(logfile_name) {
@@ -74,6 +81,10 @@ class SocketClient {
 				m_unlock_pd_wr=-1;
 				m_self_mac_set=false;
 				memset(m_self_mac,0,6);
+				denm_decoding_enabled=false;
+				#if GPSD_ENABLED
+				m_gpsc_ptr=nullptr;
+				#endif
 				// m_routeros_rssi={};
 				// m_terminate_routeros_rssi_flag=false;
 			}
@@ -83,6 +94,13 @@ class SocketClient {
 			void setClientID(std::string id) {m_client_id=id;}
 
 			void setSelfMAC(uint8_t self_mac[6]) {memcpy(m_self_mac,self_mac,6); m_self_mac_set=true;}
+
+			void enableDENMdecoding() {denm_decoding_enabled=true;}
+			void disableDENMdecoding() {denm_decoding_enabled=true;}
+
+			#if GPSD_ENABLED
+			void setGPSClient(GPSClient *gpsc_ptr) {m_gpsc_ptr=gpsc_ptr;}
+			#endif
 
 			void startReception(void);
 			void stopReception(void);

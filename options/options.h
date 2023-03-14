@@ -30,7 +30,11 @@
 #include "options_strings.h"
 
 // Insert here the version string
-#define VERSION_STR "AIM 0.1.0-beta (der. S-LDM 1.1.9-beta)" // 1.0.0 -> first (initial) cross-border version
+#if GPSD_ENABLED
+#define VERSION_STR "AIM 0.1.2-beta (based on S-LDM 1.1.9-beta) - libgps support"
+#else
+#define VERSION_STR "AIM 0.1.2-beta (based on S-LDM 1.1.9-beta)"
+#endif
 
 #define DEFAULT_VEHVIZ_NODEJS_UDP_ADDR "127.0.0.1"
 #define DEFAULT_VEHVIZ_NODEJS_UDP_PORT 48110
@@ -49,13 +53,17 @@
 #define DEFAULT_IFACE "wlan0"
 #define DEFAULT_UDP_PORT 47101
 
-// Default IP address for the connected auxiliary device
-#define DEFAULT_AUX_IP "192.168.88.2"
+// Default port for the connection to gpsd, when position logging is enabled
+#define GPSD_DEFAULT_PORT 2947
 
 // Valid options
 // Any new option should be handled in the switch-case inside parse_options() and the corresponding char should be added to VALID_OPTS
 // If an option accepts an additional argument, it is followed by ':'
-#define VALID_OPTS "hvZ:z:w:L:gi:p:R:E"
+#if GPSD_ENABLED
+#define VALID_OPTS "hvZ:z:w:L:gi:p:R:EDP:"
+#else
+#define VALID_OPTS "hvZ:z:w:L:gi:p:R:ED"
+#endif
 
 #define INIT_CODE 0xAE
 
@@ -89,6 +97,13 @@ typedef struct options {
 	options_string auxiliary_device_ip_addr;
 
 	bool enable_enhanced_CAMs;
+
+	bool denm_printing_enabled; // Set to 'true' if AIM should print a basic set of information for each received DENM, other than using CAMs to update the internal map (optional, 'false' by default)
+	
+	#if GPSD_ENABLED
+	bool position_printing_enabled; // If DENM printing is enabled, position printing will print also the current position of the vehicle for each received DENM
+	long position_printing_gnss_port; // Port for connecting to gpsd when "position_printing_enabled" is 'true'
+	#endif
 } options_t;
 
 void options_initialize(struct options *options);

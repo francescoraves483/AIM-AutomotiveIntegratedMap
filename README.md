@@ -9,10 +9,14 @@ The ability to receive and decode Enhanced CAMs must be manually enabled through
 
 If standard CAMs are used and `--enable-enhanced-CAMs` is not specified, AIM can be fully used without any limitation, and it will just not store the additional node and channel load information, being limited to the dynamic data available inside standard CAMs (i.e., to the same set of data which can be store inside the [S-LDM](https://github.com/francescoraves483/S-LDM)).
 
-When `--enable-enhanced-CAMs`/`-E`is not specified, `--aux-dev-addr` will have no effect and should not be specified.
+When `--enable-enhanced-CAMs`/`-E` is not specified, `--aux-dev-addr` will have no effect and should not be specified.
 
 By default, AIM also launches a web-based user interface, on **port 8080**, displaying the content of the database (i.e., the stored nearby vehicles on a map), updated every 500 ms.
 The behaviour of the web-based interface can be customized with the `--vehviz-update-interval`, `--vehviz-web-port`, `--vehviz-nodejs-port` and `--vehviz-nodejs-address` options.
+
+If the `--print-denms`/`-D` option is specified, AIM will also receive and decode **version 2 DENM messages**. However, these messages are not yet used for updating the internal database, and their reception will just make AIM print additional log lines with some basic information (for each DENM), i.e., the DENM stationID, event position, GeoNetworking timestamp, and RSSI signal level (gathered by launching `iw`). If `-P` is specified too, and a GNSS receiver is available (through `gpsd`), AIM will also log the current position, speed and heading when each DENM message is received. The `-P` option is available only if AIM is compiled with `libgps` support.
+
+**Warning:** the `--print-denms`/`-D` option requires to have `stdbuf`, `grep` and `tr` installed on the system running AIM!
 
 # Compiling AIM
 
@@ -49,6 +53,8 @@ The full AIM help, with all the available options, can be displayed with:
 
 If you get a permission denied error (as AIM is internally using *raw sockets*), you can try launching again AIM with `sudo` or from the `root` user.
 
+**Note:** to compile AIM will `libgps` support, enabling the `-P` option, you need to install `libgps-dev` as pre-requisite and you should explicitely use the make target `compilePC_gpsd` (i.e., `make compilePC_gpsd`).
+
 # Cross-compiling AIM for OpenWrt
 
 AIM is also thought to be easily cross-compiled for any embedded platform or router running OpenWrt.
@@ -57,9 +63,17 @@ The target platform must be able to run *Node.js*, as it is used by the AIM web-
 
 Cross-compilation also leverages `make`.
 
-First of all, an OpenWrt toolchain must be available in the device used for cross-compilation, with the `PATH` and `STAGING_DIR` environment variables being properly set. You can find additional information on how to set up the OpenWrt toolchain [here](https://openwrt.org/docs/guide-developer/toolchain/crosscompile).
+First of all, an OpenWrt toolchain must be available in the device used for cross-compilation, with the `PATH` and `STAGING_DIR` environment variables being properly set. You can find additional information on how to set up the OpenWrt toolchain [here](https://openwrt.org/docs/guide-developer/toolchain/crosscompile). If you want to support the optional `-P` option for printing positioning data for received DENMs, when performing the build procedure steps select the `libgps` package with `make menuconfig`.
 
-After setting up a cross-compilation toolchain, `cd` into the AIM project main directory:
+Then, open the AIM `Makefile` and update lines 3 to 5 with the proper cross-compilers. The Makefile comes pre-configured for an `x86_64` architecture based on `musl` (e.g., the architecture of the [PC Engines APU2 boards](https://www.pcengines.ch/apu2.htm)).
+
+Update also line 6 with the proper name of the target (the target name corresponds to the name of the `target-*` directory inside the `build_dir` folder of the OpenWrt build system main directory). The Makefile comes pre-configured with a target for an `x86_64` architecture based on `musl` (i.e., `target-x86_64_musl`).
+
+**Only** if you want to compile AIM with `libgps` support, update lines 7 and 8 too:
+- Line 7 (`OPENWRT_TOOLCHAIN`) should be updated with the name of the OpenWrt toolchain directory. This is the name of the `toolchain-*` directory inside the `build_dir` folder of the OpenWrt build system main directory). The Makefile comes pre-configured with a target for an `x86_64` architecture based on `musl`, and for OpenWrt 21 with gcc 8.4.0 (i.e., `toolchain-x86_64_gcc-8.4.0_musl`).
+- Line 8 (`OPENWRT_LIBGPS_VER`) should be updated with the libgps version which came with the OpenWrt toolchain installation (currently, it should be kept to `3.23`, but it may change in the future)
+
+After setting up the cross-compilation toolchain, `cd` into the AIM project main directory:
 ```
 cd AIM-AutomotiveIntegratedMap
 ```
@@ -71,6 +85,8 @@ As in the previous case, a binary file named `AIM` will be generated. The execut
 ```
 ./AIM --interface <interface from which CAMs will be received>
 ``` 
+
+**Note:** to cross-compile AIM will `libgps` support, enabling the `-P` option, you should explicitely use the make target `compileAPU_gpsd` (i.e., `make compileAPU_gpsd`).
 
 You can also make AIM run as a service, by creating two new files inside the OpenWrt file system: 
 - `/etc/init.d/AIM`, to create a new service
