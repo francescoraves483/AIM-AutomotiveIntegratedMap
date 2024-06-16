@@ -1,3 +1,10 @@
+# AIM is now part of OScar
+
+All the features of AIM, __except for the support to enhanced CAMs__, are now integrated into the Local Dynamic Map (LDM) module of OScar, our open implementation of the ETSI C-ITS stack.
+You can find more information on OScar [here](https://github.com/DriveX-devs/OScar).
+
+Therefore, AIM is no longer going to be maintained with the exclusion of the enhanced CAM features. The latter are going to be maintained as part of this repository, until they will be fully integrated into OScar.
+
 # AIM - Automotive Integrated Map
 
 This is the main repository for AIM, the **Automotive Integrated Map**, an enriched, highly-efficient, in-vehicle local dynamic map implementation (V-LDM - Vehicle Local Dynamic Map), based on the [S-LDM (Server Local Dynamic Map)](https://github.com/francescoraves483/S-LDM) component implementation (*1.1.9-beta*). AIM is written in C++.
